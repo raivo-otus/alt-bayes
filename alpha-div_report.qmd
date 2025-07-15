@@ -1,0 +1,25 @@
+---
+title: "Probabilistic alternative to 2 group t-test"
+author: "Rasmus Hindström"
+date: last-modified
+format:
+    html:
+        toc: true
+        toc_float: true
+        embed-resources: true
+---
+
+# Introduction
+
+In microbiome research it is common to compute alpha diversity metrics and compare them between two groups. Alpha diversity is a measure of the within sample diversity, and it is often computed as the number of observed species (richness), the Shannon index, or the Simpson index. Frequentist methods for comparing groups include the t-test and the Wilcoxon rank-sum test. For comparision of more than two groups, Kruskal-Wallis test is commonly used, along with ANOVA and PERMANOVA. 
+
+However, these methods have their shortcomings, and rely on assumptions that are often violated in practice when handling microbiome data (e.g. non-normality, heteroscedasticity, and sparsity). Probabilistic methods, provide a more flexible framework able to handle these issues in a robust way. Yet, they are not widely used in the field of microbiome research. Increasing awareness and showcasing the advantages of probabilistic methods as an alternative contributes to laying the foundation for wider adoption within the field. 
+
+## Alpha Diversity and the Shannon index
+
+## Two sample t-test
+
+## A bayesian alternative
+
+# Case-study
+
