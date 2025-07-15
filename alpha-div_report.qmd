@@ -9,17 +9,111 @@ format:
         embed-resources: true
 ---
 
-# Introduction
+# 1. Introduction
 
 In microbiome research it is common to compute alpha diversity metrics and compare them between two groups. Alpha diversity is a measure of the within sample diversity, and it is often computed as the number of observed species (richness), the Shannon index, or the Simpson index. Frequentist methods for comparing groups include the t-test and the Wilcoxon rank-sum test. For comparision of more than two groups, Kruskal-Wallis test is commonly used, along with ANOVA and PERMANOVA. 
 
 However, these methods have their shortcomings, and rely on assumptions that are often violated in practice when handling microbiome data (e.g. non-normality, heteroscedasticity, and sparsity). Probabilistic methods, provide a more flexible framework able to handle these issues in a robust way. Yet, they are not widely used in the field of microbiome research. Increasing awareness and showcasing the advantages of probabilistic methods as an alternative contributes to laying the foundation for wider adoption within the field. 
 
-## Alpha Diversity and the Shannon index
+## 1.1. Alpha Diversity and the Shannon index
 
-## Two sample t-test
+Higher alpha diversity, the diversity within a sample, is often associated in studies with a healthy state. A microbiome with high diversity is thought to be more resilient to perturbations, and more capable of performing a wide range of functions. The simplest measure of alpha diversity is just the number of observed species, richness, but this does not take into account relative abundances or other information about the community. The Shannon index is one such diversity measure that takes into account the distribution of taxa, or more precicsely how evenly they are distrubuted. Put simply, more species distributed evenly results in a higher Shannon index. Less species, with uneven distribution leads to a low index. Shannon index has the feature of being typically close to normally distributed in datasets.
 
-## A bayesian alternative
+## 1.2. Two sample t-test
 
-# Case-study
+## 1.3. A bayesian alternative
+
+# 2. Case-study
+
+## 2.1. Data preparation
+
+```{r}
+#| label: setup
+#| echo: false
+#| output: false 
+
+# load libraries
+library(mia)
+library(scater)
+
+
+# Load example dataset
+data("peerj13075", package = "mia")
+tse <- peerj13075
+```
+
+The `peerj13075` dataset contains skin microbial profiles from 58 volunteers. Data is from 16S amplicon sequencing and contains samples from across 3 regions. 
+
+```{r}
+#| label: data-wrangling
+
+# Selecting only two regions
+tse <- tse[, tse$Geographical_location %in% c("Ahmednagar", "Nashik")]
+dim(tse)
+```
+
+Keeping the samples from the regions of Ahmednagar and Nashik we retain `r dim(tse)[2]` samples.
+
+```{r}
+#| label: addAlpha
+
+# Adding Shannon index
+tse <- addAlpha(
+    tse,
+    assay.type = "counts",
+    index = "shannon",
+    detection = 10
+)
+
+# Plotting 
+plotColData(
+    tse,
+    "shannon",
+    "Geographical_location") +
+    labs(
+        x = "Geographical location",
+        y = "Shannon index"
+    ) +
+    theme_bw()
+```
+
+After computing the Shannon index the plotted data shows that between the two regions there doesn't appear to be large difference, although within the samples from Ahmednagar there is a wider range of Shanon index values.
+
+## 2.2. The t-test
+
+To confirm with statistical testing whether the regions differ in Shannon index we can use a t-test. One of the assumptions of the t-test is the normality of the data. The violin plot above suggests that the data is approximately normally distributed.
+
+```{r}
+#| label: t-test
+
+# Performing t-test
+res <- t.test(
+    tse$shannon[tse$Geographical_location == "Ahmednagar"],
+    tse$shannon[tse$Geographical_location == "Nashik"],
+    alternative = "two.sided"
+)
+
+res
+```
+
+The t-test returns a p-value of `r format.pval(res$p.value, digits = 3)` with the confidence interval of the difference between the means being `r paste0("(", round(res$conf.int[1], 2), ", ", round(res$conf.int[2], 2), ")")`. The t-test suggests that there is no significant difference in Shannon index between the two regions. 
+
+Being able to conclude that the two regions do not significantly differ is useful. However, that is the extent of the information we can extract from the t-test. 
+
+## 2.3. A probabilistic alternative
+
+As Kruschke (2013) points out in his paper, the probabilistic alternative to comparing two groups is able to provide more information, an intuitive interpretation, and a more robust framework. All without touching p-values, whos interpretation is often misunderstood, prone to misuse and abuse. 
+
+
+
+
+# Bibliography
+
+- Kruschke, J. K. (2013). Bayesian estimation supersedes the t test. Journal of Experimental Psychology: General, 142(2), 573–603. https://doi.org/10.1037/a0029146
+
+
+
+
+
+
 
