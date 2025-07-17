@@ -21,7 +21,15 @@ Higher alpha diversity, the diversity within a sample, is often associated in st
 
 ## 1.2. Two sample t-test
 
+The two sample t-test is a statistical test used to compare the means of two groups. It is based on the assumption that the data is normally distributed, and that the variances of the two groups are equal. The t-test returns a p-value, which indicates the probability of observing the data if the null hypothesis is true. The null hypothesis states that there is no difference between the two groups. If the p-value is below a certain threshold (e.g. 0.05), we reject the null hypothesis and conclude that there is a significant difference between the two groups. The t-test assumes that both groups have the same variance, the welch t-test is a variation of the t-test that does not assume equal variances, and is more robust to violations of this assumption.
+
+The t-test is only able to reject the null hypothesis, or fail to reject it. It does not provide any information about the size of the effect, or the probability of the effect size. This is a major limitation of the t-test, as it does not provide any information about the practical significance of the difference between the two groups.
+
 ## 1.3. A bayesian alternative
+
+Bayesian or probabilistic alternatives to the t-test come with their own set of limitations. There is also no agreement on which is the best alternative, as there are a few approuches. Kruschke (2013) suggests a method termed BEST (bayesian estimation supersedes t test) that relies on the posterior distributions of the groups and their difference. It is able to provide more informative inference and is able to accept the null hypothesis. The decision is based on HDI and the concept of ROPE (region of practical equivalence). A high value for ROPE---a big proportion of the HDI is within the ROPE---indicates that there is no significant difference between the two groups. A low value conversly indicates that there is a significant difference. As these values are computed from the posterior distributions, they can provide a more nuanced view of the data. The BEST -method has its limitations as it is only really usable for two groups, and the model structure while flexible is complex and requires careful consideration of the priors. It can however be used for even small datasets, and is able to handle non-normality and heteroscedasticity (Kruschke, 2013).
+
+Other alternatives have been proposed, which rely on the Bayes factor. They are in essance a model comparison, where the Bayes factor is used to compare the null model (no difference between the groups) to the alternative model (difference between the groups). The Bayes factor is a ratio of the posterior probabilities of the two models, and can be used to assess the strength of evidence for or against the null hypothesis (Kelter, 2021). 
 
 # 2. Case-study
 
@@ -96,7 +104,7 @@ res <- t.test(
 res
 ```
 
-The t-test returns a p-value of `r format.pval(res$p.value, digits = 3)` with the confidence interval of the difference between the means being `r paste0("(", round(res$conf.int[1], 2), ", ", round(res$conf.int[2], 2), ")")`. The t-test suggests that there is no significant difference in Shannon index between the two regions. 
+The t-test returns a p-value of `r format.pval(res$p.value, digits = 3)` with the confidence interval of `r paste0("(", round(res$conf.int[1], 2), ", ", round(res$conf.int[2], 2), ")")`. The t-test suggests that there is no significant difference in Shannon index between the two regions.
 
 Being able to conclude that the two regions do not significantly differ is useful. However, that is the extent of the information we can extract from the t-test. 
 
@@ -104,12 +112,68 @@ Being able to conclude that the two regions do not significantly differ is usefu
 
 As Kruschke (2013) points out in his paper, the probabilistic alternative to comparing two groups is able to provide more information, an intuitive interpretation, and a more robust framework. All without touching p-values, whos interpretation is often misunderstood, prone to misuse and abuse. 
 
+The approach Kruschke (2013) suggests---bayesian estimation supersedes t test (BEST)---is to compute the posterior distribution of the difference between the two groups. This is done by sampling from the posterior distribution of each group, and then computing the difference between them. The posterior distribution of the difference can then be used to compute credible intervals, and to assess whether the two groups differ.
+
+The BEST model uses bayesian estimation to estimate 5 parameters in total. The mean and sd of each group, and a hyperparameter that controls the level of normality of the t-distribution. From the two distributions for the groups posterior draws can be made, and a posterior distribution for the difference computed. From this distribution the decision and inference can be made, based on HDI (highest density interval, e.g. 89%) and the area inside the ROPE (region of practical equivalence).
+
+```{r}
+
+
+
+```
+
+```{r}
+#| label: bayes-test
+
+# Load libraries
+library(brms)
+library(bayesplot)
+library(bayestestR)
+library(dplyr)
+
+# Prepare date
+df <- as.data.frame(colData(tse))
+df <- df %>%
+    select(Geographical_location, shannon) %>%
+    mutate(Geographical_location = factor(Geographical_location)) %>%
+    filter(Geographical_location %in% c("Ahmednagar", "Nashik"))
+
+# Fit model
+fit <- brm(
+  formula = shannon ~ Geographical_location,
+  data = df,
+  family = student(),
+  prior = c(
+    prior(normal(0, 5), class = "b"),            # Prior on group effect (difference)
+    prior(normal(0, 5), class = "Intercept"),    # Prior on baseline mean
+    prior(exponential(1), class = "sigma"),      # Prior on residual SD
+    prior(gamma(2, 0.1), class = "nu")           # Prior on degrees of freedom (heavy tails)
+  ),
+  chains = 4,
+  iter = 4000,
+  cores = 4
+)
+```
+
+```{r}
+# Plotting the posterior distribution of the difference
+posterior_summary(fit)
+mcmc_dens(fit)
+
+describe_posterior(fit, effects = "fixed", parameters = "b_Geographical_locationNashik")
+``` 
+
 
 
 
 # Bibliography
 
 - Kruschke, J. K. (2013). Bayesian estimation supersedes the t test. Journal of Experimental Psychology: General, 142(2), 573–603. https://doi.org/10.1037/a0029146
+
+- Paul-Christian Bürkner (2017). brms: An R Package for Bayesian Multilevel Models Using Stan. Journal of Statistical Software, 80(1), 1-28. https://doi.org/10.18637/jss.v080.i01
+
+- Kelter, R. (2021). Bayesian and frequentist testing for differences between two groups with parametric and nonparametric two‐sample tests. WIREs Computational Statistics, 13(6). https://doi.org/10.1002/wics.1523
+
 
 
 
