@@ -32,6 +32,11 @@ Bayesian or probabilistic alternatives to the t-test come with their own set of 
 
 Other alternatives have been proposed, which rely on the Bayes factor. They are in essance a model comparison, where the Bayes factor is used to compare the null model (no difference between the groups) to the alternative model (difference between the groups). The Bayes factor is a ratio of the posterior probabilities of the two models, and can be used to assess the strength of evidence for or against the null hypothesis (Kelter, 2021). 
 
+The main benefit from Bayesian an probabilistic methods comes from the richer inference they provide. As Gelman et al. (2013) write, "In fact, most of the difficulties
+in interpreting hypothesis tests arise from the artificial dichotomy that is required between
+$\theta = \theta_0$ and $\theta \neq \theta_0$...for a continuous parameter $\theta$, the question ‘Does $\theta$ equal 0?’ can generally
+be rephrased more usefully as ‘What is the posterior distribution for $\theta$?’" 
+
 # 2. Case-study
 
 In this case-study we will analyze the alpha diversity differences across two geographical regions, Ahmednagar and Nashik. The data is included in the `mia` package and is a subset of the `peerj13075` dataset. This dataset contains skin microbial profiles, generated from 16S amplicon sequencing data.
@@ -92,8 +97,7 @@ After computing the Shannon index the plotted data shows that between the two re
 
 ## 2.2. The t-test
 
-To confirm with statistical testing whether the regions differ in Shannon index we can use a t-test. One of the assumptions of the t-test is the normality of the data. The violin plot above suggests that the data is approximately normally distributed.
-Which is good enough for now.
+To confirm with statistical testing whether the regions differ in Shannon index we can use a t-test. One of the assumptions of the t-test is the normality of the data. In the violin plot above the data appears to be normally distributed, or at least close enough. 
 
 ```{r}
 #| label: t-test
@@ -116,7 +120,9 @@ As Kruschke (2013) points out in his paper, the probabilistic alternative to com
 
 The approach Kruschke (2013) suggests---bayesian estimation supersedes t test (BEST)---is to compute the posterior distribution of the difference between the two groups. This is done by sampling from the posterior distribution of each group, and then computing the difference between them. The posterior distribution of the difference can then be used to compute credible intervals, and to assess whether the two groups differ.
 
-The BEST model uses bayesian estimation to estimate 5 parameters in total. The mean and sd of each group, and a hyperparameter that controls the level of normality of the t-distribution. From the two distributions for the groups posterior draws can be made, and a posterior distribution for the difference computed. From this distribution the decision and inference can be made, based on HDI (highest density interval, e.g. 89%) and the area inside the ROPE (region of practical equivalence.)
+The BEST model uses bayesian estimation to estimate 5 parameters in total. The mean and sd of each group, and a hyperparameter that controls the level of normality of the t-distribution. From the two distributions for the groups posterior draws can be made, and a posterior distribution for the difference computed. From this distribution the decision and inference can be made, based on HDI (highest density interval, e.g. 95%) and the area inside the ROPE (region of practical equivalence.) The ROPE must be defined beforehand based on domain knowledge. What is the region of practical equivalence? What is the smallest difference that is considered meaningful? In this example we will use a ROPE of [-0.2, 0.2], meaning that any difference between the two groups that is within this range is considered practically equivalent. This is the crux of the problem, since defining and justifying the ROPE is often difficult.
+
+Setting the priors is a crucial step, here relatively uninformative priors have been chosen. Note the prior on group means is a truncated normal distribution, which is centered around 3. A typical range of Shannon index values in human microbiomes is between 1-4.
 
 
 ```{r}
@@ -150,8 +156,8 @@ fit_best <- brm(
   data = df,
   family = student(),
   prior = c(
-    # Priors on group means (weakly informative)
-    prior(normal(0, 1), class = "b", dpar = ""),
+    # Priors on group means, truncated to be positive
+    prior(normal(3, 1), class = "b", dpar = "", lb = 0, ub = Inf),
     # Priors on log(sigma) for each group  
     prior(normal(0, 1), class = "b", dpar = "sigma"),
     # Prior on degrees of freedom (nu) - controls heaviness of tails
@@ -221,13 +227,11 @@ cat(output, sep = "\n")
 #| label: best-rope
 
 # ROPE Analysis (Region of Practical Equivalence)
-# Standardized to +/- 0.1 pooled SD
-pooled_sd <- sqrt((mean(sigma_ahmednagar^2) + mean(sigma_nashik^2)) / 2)
-rope_lower <- -0.1 * pooled_sd
-rope_upper <- 0.1 * pooled_sd
+rope_lower <- -0.2
+rope_upper <- 0.2
 
-# Calculate 89% HDI first (Kruschke's recommendation)
-hdi_result <- hdi(difference, ci = 0.89)
+# Calculate 95% HDI first
+hdi_result <- hdi(difference, ci = 0.95)
 hdi_lower <- hdi_result$CI_low
 hdi_upper <- hdi_result$CI_high
 
@@ -235,12 +239,12 @@ output <- capture.output({
     cat("\nROPE Analysis (HDI-based):\n")
     cat("==========================\n")
     cat("ROPE bounds: [", rope_lower, ", ", rope_upper, "]\n")
-    cat("89% HDI: [", round(hdi_lower, 3), ", ", round(hdi_upper, 3), "]\n\n")
+    cat("95% HDI: [", round(hdi_lower, 3), ", ", round(hdi_upper, 3), "]\n\n")
 })
 cat(output, sep = "\n")
 
 # Calculate HDI-ROPE overlap proportion
-# Extract only the posterior samples that fall within the 89% HDI
+# Extract only the posterior samples that fall within the 95% HDI
 hdi_samples <- difference[difference >= hdi_lower & difference <= hdi_upper]
 # Calculate what proportion of these HDI samples also fall within ROPE
 hdi_rope_overlap_proportion <- mean(hdi_samples >= rope_lower & hdi_samples <= rope_upper)
@@ -298,7 +302,7 @@ p1 <- ggplot(plot_data, aes(x = difference)) +
   annotate("rect", xmin = hdi_lower, xmax = hdi_upper, 
            ymin = -Inf, ymax = Inf, alpha = 0.2, fill = "steelblue") +
   labs(title = "Posterior Distribution with HDI and ROPE",
-       subtitle = "Red: no difference | Green: ROPE | Blue: 89% HDI",
+       subtitle = "Red: no difference | Green: ROPE | Blue: 95% HDI",
        x = "Shannon Index Difference (Ahmednagar - Nashik)",
        y = "Density") +
   theme_minimal()
@@ -329,7 +333,9 @@ p3 <- ggplot() +
   theme_minimal()
 
 # Plot 4: Effect size (Cohen's d equivalent)
-cohens_d <- difference / sqrt((sigma_ahmednagar^2 + sigma_nashik^2) / 2)
+# Group sizes are equal, so we can use pooled SD, without weighting
+pooled_sd <- sqrt((mean(sigma_ahmednagar^2) + mean(sigma_nashik^2)) / 2)
+cohens_d <- difference / pooled_sd
 p4 <- ggplot(data.frame(cohens_d = cohens_d), aes(x = cohens_d)) +
   geom_density(fill = "lightgreen", alpha = 0.7) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
@@ -344,7 +350,7 @@ p4 <- ggplot(data.frame(cohens_d = cohens_d), aes(x = cohens_d)) +
 (p1 + p2) / (p3 + p4)
 ```
 
-Based on the BEST -method we find that the difference in Shannon index between the two regions is inconclusive. We neither reject or accept the null hypothesis, based on Kruschke's (2013) decision boundries using HDI and ROPE. Additionally, the posterior distribution of effect size suggests a small effect size. Together, these results suggest that while there is a difference in mean Shannon index between the two regions, we do not have enough evidence to conclude that the difference is practically significant. At best we can say that there is a small difference, but it is not large enough to reject the possibility of practical equivalence. 
+Here a large portion of the HDI resides within the ROPE, indicating that there is no significant difference between the two groups. However, the method does inform us that the Ahmednagar region has a substantial probability of having a higher mean Shannon index then the Nashik region. 
 
 # 3. Conclusion
 
@@ -355,6 +361,8 @@ In this case-study we have demonstrated how to use a probabilistic alternative t
 - Kruschke, J. K. (2013). Bayesian estimation supersedes the t test. Journal of Experimental Psychology: General, 142(2), 573–603. https://doi.org/10.1037/a0029146
 
 - Kelter, R. (2021). Bayesian and frequentist testing for differences between two groups with parametric and nonparametric two‐sample tests. WIREs Computational Statistics, 13(6). https://doi.org/10.1002/wics.1523
+
+- Gelman, A., Carlin, J. B., Stern, H. S., Dunson, D. B., Vehtari, A., & Rubin, D. B. (2013). Bayesian Data Analysis (3rd ed.). Chapman & Hall/CRC. https://doi.org/10.1201/b16018
 
 
 
