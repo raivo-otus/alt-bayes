@@ -7,6 +7,7 @@ format:
         toc: true
         toc_float: true
         embed-resources: true
+        code-fold: true
 ---
 
 # 1. Introduction
@@ -32,6 +33,8 @@ Bayesian or probabilistic alternatives to the t-test come with their own set of 
 Other alternatives have been proposed, which rely on the Bayes factor. They are in essance a model comparison, where the Bayes factor is used to compare the null model (no difference between the groups) to the alternative model (difference between the groups). The Bayes factor is a ratio of the posterior probabilities of the two models, and can be used to assess the strength of evidence for or against the null hypothesis (Kelter, 2021). 
 
 # 2. Case-study
+
+In this case-study we will analyze the alpha diversity differences across two geographical regions, Ahmednagar and Nashik. The data is included in the `mia` package and is a subset of the `peerj13075` dataset. This dataset contains skin microbial profiles, generated from 16S amplicon sequencing data.
 
 ## 2.1. Data preparation
 
@@ -90,46 +93,47 @@ After computing the Shannon index the plotted data shows that between the two re
 ## 2.2. The t-test
 
 To confirm with statistical testing whether the regions differ in Shannon index we can use a t-test. One of the assumptions of the t-test is the normality of the data. The violin plot above suggests that the data is approximately normally distributed.
+Which is good enough for now.
 
 ```{r}
 #| label: t-test
 
 # Performing t-test
-res <- t.test(
+tRes <- t.test(
     tse$shannon[tse$Geographical_location == "Ahmednagar"],
-    tse$shannon[tse$Geographical_location == "Nashik"],
-    alternative = "two.sided"
+    tse$shannon[tse$Geographical_location == "Nashik"]
 )
 
-res
+tRes
 ```
 
-The t-test returns a p-value of `r format.pval(res$p.value, digits = 3)` with the confidence interval of `r paste0("(", round(res$conf.int[1], 2), ", ", round(res$conf.int[2], 2), ")")`. The t-test suggests that there is no significant difference in Shannon index between the two regions.
-
-Being able to conclude that the two regions do not significantly differ is useful. However, that is the extent of the information we can extract from the t-test. 
+The t-test returns a p-value of `r format.pval(tRes$p.value, digits = 3)` with the confidence interval of `r paste0("(", round(tRes$conf.int[1], 2), ", ", round(tRes$conf.int[2], 2), ")")`. The t-test suggests that there is no significant difference in Shannon index between the two regions. 
+We fail to reject the null hypothesis. 
 
 ## 2.3. A probabilistic alternative
 
-As Kruschke (2013) points out in his paper, the probabilistic alternative to comparing two groups is able to provide more information, an intuitive interpretation, and a more robust framework. All without touching p-values, whos interpretation is often misunderstood, prone to misuse and abuse. 
+As Kruschke (2013) points out in his paper, the probabilistic alternative to comparing two groups is able to provide more information, an intuitive interpretation, and a more robust framework. All without touching p-values, often misunderstood.
 
 The approach Kruschke (2013) suggests---bayesian estimation supersedes t test (BEST)---is to compute the posterior distribution of the difference between the two groups. This is done by sampling from the posterior distribution of each group, and then computing the difference between them. The posterior distribution of the difference can then be used to compute credible intervals, and to assess whether the two groups differ.
 
-The BEST model uses bayesian estimation to estimate 5 parameters in total. The mean and sd of each group, and a hyperparameter that controls the level of normality of the t-distribution. From the two distributions for the groups posterior draws can be made, and a posterior distribution for the difference computed. From this distribution the decision and inference can be made, based on HDI (highest density interval, e.g. 89%) and the area inside the ROPE (region of practical equivalence).
+The BEST model uses bayesian estimation to estimate 5 parameters in total. The mean and sd of each group, and a hyperparameter that controls the level of normality of the t-distribution. From the two distributions for the groups posterior draws can be made, and a posterior distribution for the difference computed. From this distribution the decision and inference can be made, based on HDI (highest density interval, e.g. 89%) and the area inside the ROPE (region of practical equivalence.)
+
 
 ```{r}
-
-
-
-```
-
-```{r}
-#| label: bayes-test
+#| label: libraries
+#| output: false
 
 # Load libraries
 library(brms)
 library(bayesplot)
 library(bayestestR)
 library(dplyr)
+library(posterior)
+```
+
+```{r}
+#| label: bayes-test
+#| output: false
 
 # Prepare date
 df <- as.data.frame(colData(tse))
@@ -138,39 +142,217 @@ df <- df %>%
     mutate(Geographical_location = factor(Geographical_location)) %>%
     filter(Geographical_location %in% c("Ahmednagar", "Nashik"))
 
-# Fit model
-fit <- brm(
-  formula = shannon ~ Geographical_location,
+# BEST Method Implementation
+# Using brm with heteroskedastic model
+fit_best <- brm(
+  bf(shannon ~ 0 + Geographical_location,  # No intercept, estimate group means directly
+     sigma ~ 0 + Geographical_location),   # Allow different variances per group
   data = df,
   family = student(),
   prior = c(
-    prior(normal(0, 5), class = "b"),            # Prior on group effect (difference)
-    prior(normal(0, 5), class = "Intercept"),    # Prior on baseline mean
-    prior(exponential(1), class = "sigma"),      # Prior on residual SD
-    prior(gamma(2, 0.1), class = "nu")           # Prior on degrees of freedom (heavy tails)
+    # Priors on group means (weakly informative)
+    prior(normal(0, 1), class = "b", dpar = ""),
+    # Priors on log(sigma) for each group  
+    prior(normal(0, 1), class = "b", dpar = "sigma"),
+    # Prior on degrees of freedom (nu) - controls heaviness of tails
+    prior(gamma(2, 0.1), class = "nu")
   ),
-  chains = 4,
+  chains = 8,
   iter = 4000,
-  cores = 4
+  cores = 8,
+  seed = 42
 )
 ```
 
 ```{r}
-# Plotting the posterior distribution of the difference
-posterior_summary(fit)
-mcmc_dens(fit)
+#| label: best-analysis
 
-describe_posterior(fit, effects = "fixed", parameters = "b_Geographical_locationNashik")
-``` 
+# Get posterior draws
+draws <- as_draws_df(fit_best)
 
+# Extract group means
+mu_ahmednagar <- draws$b_Geographical_locationAhmednagar
+mu_nashik <- draws$b_Geographical_locationNashik
 
+# Extract group standard deviations (note: brms uses log link for sigma)
+sigma_ahmednagar <- exp(draws$b_sigma_Geographical_locationAhmednagar)
+sigma_nashik <- exp(draws$b_sigma_Geographical_locationNashik)
 
+# Compute the difference (key BEST parameter)
+difference <- mu_ahmednagar - mu_nashik
+
+# BEST Summary Statistics
+output <- capture.output({
+    cat("BEST Analysis Results:\n")
+    cat("====================\n\n")
+
+    # Group means
+    cat("Group Means:\n")
+    cat("Ahmednagar: ", round(mean(mu_ahmednagar), 3), " [", 
+    round(quantile(mu_ahmednagar, 0.025), 3), ", ", 
+    round(quantile(mu_ahmednagar, 0.975), 3), "]\n")
+    cat("Nashik: ", round(mean(mu_nashik), 3), " [", 
+    round(quantile(mu_nashik, 0.025), 3), ", ", 
+    round(quantile(mu_nashik, 0.975), 3), "]\n\n")
+
+    # Group standard deviations
+    cat("Group Standard Deviations:\n")
+    cat("Ahmednagar: ", round(mean(sigma_ahmednagar), 3), " [", 
+    round(quantile(sigma_ahmednagar, 0.025), 3), ", ", 
+    round(quantile(sigma_ahmednagar, 0.975), 3), "]\n")
+    cat("Nashik: ", round(mean(sigma_nashik), 3), " [", 
+    round(quantile(sigma_nashik, 0.025), 3), ", ", 
+    round(quantile(sigma_nashik, 0.975), 3), "]\n\n")
+
+    # Difference between groups
+    cat("Difference (Ahmednagar - Nashik):\n")
+    cat("Mean difference: ", round(mean(difference), 3), "\n")
+    cat("95% HDI: [", round(quantile(difference, 0.025), 3), ", ", 
+    round(quantile(difference, 0.975), 3), "]\n")
+
+    # Probability that Ahmednagar > Nashik
+    prob_greater <- mean(difference > 0)
+    cat("P(Ahmednagar > Nashik): ", round(prob_greater, 3), "\n")
+})
+cat(output, sep = "\n")
+```
+
+```{r}
+#| label: best-rope
+
+# ROPE Analysis (Region of Practical Equivalence)
+# Standardized to +/- 0.1 pooled SD
+pooled_sd <- sqrt((mean(sigma_ahmednagar^2) + mean(sigma_nashik^2)) / 2)
+rope_lower <- -0.1 * pooled_sd
+rope_upper <- 0.1 * pooled_sd
+
+# Calculate 89% HDI first (Kruschke's recommendation)
+hdi_result <- hdi(difference, ci = 0.89)
+hdi_lower <- hdi_result$CI_low
+hdi_upper <- hdi_result$CI_high
+
+output <- capture.output({
+    cat("\nROPE Analysis (HDI-based):\n")
+    cat("==========================\n")
+    cat("ROPE bounds: [", rope_lower, ", ", rope_upper, "]\n")
+    cat("89% HDI: [", round(hdi_lower, 3), ", ", round(hdi_upper, 3), "]\n\n")
+})
+cat(output, sep = "\n")
+
+# Calculate HDI-ROPE overlap proportion
+# Extract only the posterior samples that fall within the 89% HDI
+hdi_samples <- difference[difference >= hdi_lower & difference <= hdi_upper]
+# Calculate what proportion of these HDI samples also fall within ROPE
+hdi_rope_overlap_proportion <- mean(hdi_samples >= rope_lower & hdi_samples <= rope_upper)
+
+# Proportion of full posterior in ROPE (for comparison)
+full_rope_proportion <- mean(difference >= rope_lower & difference <= rope_upper)
+
+# ROPE Decision based on HDI
+output <- capture.output({
+    cat("HDI-ROPE overlap proportion: ", round(hdi_rope_overlap_proportion, 3), "\n")
+    cat("Full posterior in ROPE: ", round(full_rope_proportion, 3), "\n\n")
+
+    # Kruschke's decision rules based on HDI-ROPE relationship
+    if (hdi_rope_overlap_proportion > 0.95) {
+    decision <- "Accept practical equivalence (>95% of HDI within ROPE)"
+    } else if (hdi_rope_overlap_proportion < 0.05) {
+    decision <- "Reject practical equivalence (<5% of HDI within ROPE)"
+    } else {
+    decision <- "Inconclusive (HDI substantially overlaps ROPE boundary)"
+    }
+
+    cat("HDI-based Decision: ", decision, "\n")
+})
+cat(output, sep = "\n")
+```
+
+```{r}
+#| label: best-plots
+#| fig-height: 8
+#| fig-width: 12
+
+# BEST Visualizations
+library(ggplot2)
+library(patchwork)
+
+# Create data frame for plotting
+plot_data <- data.frame(
+  difference = difference,
+  mu_ahmednagar = mu_ahmednagar,
+  mu_nashik = mu_nashik,
+  sigma_ahmednagar = sigma_ahmednagar,
+  sigma_nashik = sigma_nashik
+)
+
+# Plot 1: Posterior distribution of the difference with HDI
+p1 <- ggplot(plot_data, aes(x = difference)) +
+  geom_density(fill = "cornflowerblue", alpha = 0.7) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red", linewidth = 1) +
+  geom_vline(xintercept = rope_lower, linetype = "dotted", color = "green") +
+  geom_vline(xintercept = rope_upper, linetype = "dotted", color = "green") +
+  geom_vline(xintercept = hdi_lower, linetype = "dashed", color = "blue", linewidth = 1) +
+  geom_vline(xintercept = hdi_upper, linetype = "dashed", color = "blue", linewidth = 1) +
+  annotate("rect", xmin = rope_lower, xmax = rope_upper, 
+           ymin = -Inf, ymax = Inf, alpha = 0.3, fill = "lightgreen") +
+  annotate("rect", xmin = hdi_lower, xmax = hdi_upper, 
+           ymin = -Inf, ymax = Inf, alpha = 0.2, fill = "steelblue") +
+  labs(title = "Posterior Distribution with HDI and ROPE",
+       subtitle = "Red: no difference | Green: ROPE | Blue: 89% HDI",
+       x = "Shannon Index Difference (Ahmednagar - Nashik)",
+       y = "Density") +
+  theme_minimal()
+
+# Plot 2: Group means
+p2 <- ggplot() +
+  geom_density(data = plot_data, aes(x = mu_ahmednagar), 
+               fill = "orange", alpha = 0.7, color = "orange") +
+  geom_density(data = plot_data, aes(x = mu_nashik), 
+               fill = "purple", alpha = 0.7, color = "purple") +
+  labs(title = "Posterior Distributions of Group Means",
+       x = "Shannon Index",
+       y = "Density") +
+  annotate("text", x = max(c(mu_ahmednagar, mu_nashik)), y = Inf, 
+           label = "Orange: Ahmednagar\nPurple: Nashik", 
+           vjust = 2, hjust = 1) +
+  theme_minimal()
+
+# Plot 3: Group standard deviations
+p3 <- ggplot() +
+  geom_density(data = plot_data, aes(x = sigma_ahmednagar), 
+               fill = "orange", alpha = 0.7, color = "orange") +
+  geom_density(data = plot_data, aes(x = sigma_nashik), 
+               fill = "purple", alpha = 0.7, color = "purple") +
+  labs(title = "Posterior Distributions of Group SDs",
+       x = "Shannon Index Standard Deviation",
+       y = "Density") +
+  theme_minimal()
+
+# Plot 4: Effect size (Cohen's d equivalent)
+cohens_d <- difference / sqrt((sigma_ahmednagar^2 + sigma_nashik^2) / 2)
+p4 <- ggplot(data.frame(cohens_d = cohens_d), aes(x = cohens_d)) +
+  geom_density(fill = "lightgreen", alpha = 0.7) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+  geom_vline(xintercept = c(-0.2, 0.2), linetype = "dotted", color = "gray") +
+  labs(title = "Posterior Distribution of Effect Size",
+       subtitle = "Gray lines: small effect boundaries (±0.2)",
+       x = "Cohen's d",
+       y = "Density") +
+  theme_minimal()
+
+# Combine plots
+(p1 + p2) / (p3 + p4)
+```
+
+Based on the BEST -method we find that the difference in Shannon index between the two regions is inconclusive. We neither reject or accept the null hypothesis, based on Kruschke's (2013) decision boundries using HDI and ROPE. Additionally, the posterior distribution of effect size suggests a small effect size. Together, these results suggest that while there is a difference in mean Shannon index between the two regions, we do not have enough evidence to conclude that the difference is practically significant. At best we can say that there is a small difference, but it is not large enough to reject the possibility of practical equivalence. 
+
+# 3. Conclusion
+
+In this case-study we have demonstrated how to use a probabilistic alternative to the two sample t-test, the BEST -method, to compare alpha diversity between two groups. The BEST -method is able to provide more information than the t-test, and is able to handle non-normality and heteroscedasticity. It is also able to accept the null hypothesis, and provide a more nuanced view of the data. However as Kelter (2021) points out both approuches to testing have their limitations and nuances. Bayesian or probabilistic methods have stronger control for type I error, and provide flexible modeling options with richer inference, at the cost of complexity and higher type II error. In contrast frequentist methods remain straightforward, entrenched in tradition, and control better for type II error (Kelter, 2021).
 
 # Bibliography
 
 - Kruschke, J. K. (2013). Bayesian estimation supersedes the t test. Journal of Experimental Psychology: General, 142(2), 573–603. https://doi.org/10.1037/a0029146
-
-- Paul-Christian Bürkner (2017). brms: An R Package for Bayesian Multilevel Models Using Stan. Journal of Statistical Software, 80(1), 1-28. https://doi.org/10.18637/jss.v080.i01
 
 - Kelter, R. (2021). Bayesian and frequentist testing for differences between two groups with parametric and nonparametric two‐sample tests. WIREs Computational Statistics, 13(6). https://doi.org/10.1002/wics.1523
 
