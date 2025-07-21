@@ -393,7 +393,9 @@ mod <- brm(
     ),
     data = df,
     family = gaussian(),
-    cores = 4
+    cores = 8,
+    chains = 8,
+    iter = 4000
 )
 
 summary(mod)
@@ -454,7 +456,87 @@ p1 + p2
 
 The posterior distributions of the means and standard deviations are similar to the BEST -method results. Notice that the shape of distributions is less smooth, most likely due to lower ESS, and slight difference in the model formulation using an gaussian distribution instead of a t-distribution.
 
-Just looking at these two plots, we can see that the regions appear to differ, in both means and variances. 
+Just looking at these two plots, we can see that the regions appear to differ, in both means and variances. Is the difference 'significant'? Are we even interested in putting a binary label on it?
+
+## 3.3. Making it Robust
+
+In the above model the response, shannon diversity, is modeled with a Normal distribution. In the earlier case-study using the BEST -method the response was modeled with a t-distribution. The t-distribution has heavier tails, meaning more probability mass is distributed to the extreme ends of the distribution. The extent of which is controlled by the hyperparameter $\nu$.
+When $\nu$ approaches infinity the t-distribution is practically the normal the distribution. The smaller the value of $\nu$ the more mass is at the tails. The BEST-method pooled the data and learned a shared $\nu$.
+
+Substituting in the t-distribution and adding the estimation of $\nu$ to the model is a logical next step. This way the model is better able to handle outliers or extremes.
+
+```{r}
+#| label: robust-linear-model
+
+modRob <- brm(
+    bf(
+        shannon ~ Geographical_location,
+        sigma ~ Geographical_location
+    ),
+    data = df,
+    family = student(),
+    cores = 8,
+    chains = 8,
+    iter = 4000
+)
+
+summary(modRob)
+```
+
+```{r}
+#| label: robust-linear-model-plots
+#| fig-height: 4
+#| fig-width: 12
+
+# Extract posterior draws
+draws <- as_draws_df(modRob)
+mu_ahmednagar <- draws$b_Intercept
+mu_nashik <- draws$b_Geographical_locationNashik + mu_ahmednagar
+sigma_ahmednagar <- exp(draws$b_sigma_Intercept)
+sigma_nashik <- exp(draws$b_sigma_Geographical_locationNashik + draws$b_sigma_Intercept)
+
+# Create data frame for plotting
+plot_data <- data.frame(
+    mu_nashik = mu_nashik,
+    mu_ahmednagar = mu_ahmednagar,
+    sigma_nashik = sigma_nashik,
+    sigma_ahmednagar = sigma_ahmednagar
+)
+
+# Plot 1: Posterior distributions of group means
+p1 <- ggplot(plot_data,) +
+    geom_density(aes(x = mu_ahmednagar), fill = "orange", alpha = 0.7) +
+    geom_density(aes(x = mu_nashik), fill = "purple", alpha = 0.7) +
+    labs(title = "Posterior Distributions of Group Means",
+         x = "Shannon Index",
+         y = "Density") +
+    annotate("text", x = max(c(mu_nashik, mu_ahmednagar)), y = Inf, 
+             label = "Orange: Ahmednagar\nPurple: Nashik", 
+             vjust = 2, hjust = 1) +
+    theme_minimal() 
+
+# Plot 2: Posterior distributions of group standard deviations
+p2 <- ggplot(plot_data) +
+    geom_density(aes(x = sigma_ahmednagar), fill = "orange", alpha = 0.7) +
+    geom_density(aes(x = sigma_nashik), fill = "purple", alpha = 0.7) +
+    labs(title = "Posterior Distributions of Group Standard Deviations",
+         x = "Shannon Index Standard Deviation",
+         y = "Density") +
+    theme_minimal()
+
+# Combine plots
+p1 + p2
+```
+
+The posterior distributions look about the same as with the normal model. Closer inspection of the model summary printouts below, reveals that the t-distribution model has higher effective sample sizes (ESS) which would suggest better sampling efficiency. Rhats are 1 across the board, indicating that the chains have converged. Otherwise the results and credible intervals are similar between the two models. The advantage of the 'robust' model is theoretical in this case, as the data seems to fit well to the normal distribution. 
+
+```{r}
+#| label: robust-model-summary
+
+summary(mod)
+
+summary(modRob)
+```
 
 
 
