@@ -10,11 +10,179 @@ format:
         code-fold: true
 ---
 
+# 0. Summary
+
+This report demonstrates the use and interpretation of a probabilistic alternative
+to the two sample t-test. For a more expansive deep dive into the topic refer to
+Matti Vuorre's blog post [How to Compare Two Groups with Robust Bayesian Estimation in R](https://vuorre.com/posts/2017-01-02-how-to-compare-two-groups-with-robust-bayesian-estimation-using-r-stan-and-brms/).
+Much of which is adapted within the context of microbiome research. 
+
+A common task in microbiome research is to compare alpha diversity between
+two or more groups. Often done with the t-test
+and concluded as a binary "significant or non-significant" result, the more
+rich inference provided by the probabilistic comparison will become apparent.
+Alpha diversity is a measure of the within sample diversity, and it is often computed
+as the number of observed species (richness), the Shannon index, or the Simpson index. 
+Here we demostrate comparisons of the Shannon index which takes into account abundance
+information, and is typically close to normally distributed.  
+
+# 1. Comparison of two groups
+
+Here a dataset from the `mia` package is used to demonstrate the comparison and 
+interpretation differences between the two sample t-test (Welch t-test) and an
+alternative probabilistic approach with Bayesian estimation using the `brms` package.
+
+```{r}
+#| label: load-libraries
+#| code-summary: Load required libraries
+#| echo: false
+#| output: false 
+
+library(mia)
+library(dplyr)
+library(brms)
+library(bayesplot)
+library(bayestestR)
+library(ggplot2)
+library(posterior)
+library(patchwork)
+```
+
+```{r}
+#| label: prepare-data
+#| code-summary: prepare example data
+#| 
+data("peerj13075", package = "mia")
+tse <- peerj13075
+
+# Add Shannon index
+tse <- addAlpha(
+    tse,
+    assay.type = "counts",
+    index = "shannon"
+)
+
+# Construct data frame
+df <- as.data.frame(colData(tse))
+```
+
+## 1.1. Welch t-test
+
+Welch t-test makes frees the assumption of equal variances between the two groups.
+Still retaining the assumption of normality.
+
+In essance the t-test compares the means of two groups, and returns a p-value
+indicating the probability of observing the data if the null hypothesis is true.
+The null hypothesis states that there is no difference between the two groups.
+
+```{r}
+#| label: welch-t-test
+#| code-summary: Perform Welch t-test
+
+t.test(shannon ~ Diet, data = df, var.equal = FALSE)
+```
+
+The p-value suggests that there is no significant difference between the two groups.
+We fail to reject the null hypothesis. 
+
+## 1.2. Bayesian estimation
+
+Approaching the same problem with Bayesian estimation using the `brms` package.
+
+As Matti Vuorre (2017) points out, the t-test is only a linear model under the hood.
+Extending this idea, we can formulate a probabilistic model and use `brms` to estimate
+the parameters of interest. In this case the group means and variances.
+
+$$y_{ik} \sim \mathcal{N}(\mu_k, \sigma_k^2)$$
+
+$$ \mu_k = \beta_0 + \beta_k$$
+
+$$ \sigma_k^2 = \gamma_0 + \gamma_k$$
+
+```{r}
+#| label: bayesian-estimation
+#| code-summary: Perform Bayesian estimation
+
+# Fit Bayesian model (default priors)
+fit <- brm(
+    formula = bf(
+        shannon ~ Diet,
+        sigma ~ Diet
+    ),
+    data = df,
+    family = gaussian(),
+    iter = 4000,
+    chains = 4,
+    cores = 4
+)
+
+summary(fit)
+plot(fit)
+pp_check(fit)
+```
+
+The model summary shows non-pathogenic Rhat values, indicating that the chains have converged.
+Effective sample sizes are sufficiently high (> 1000) for each parameter.
+Chains are well mixed in the traceplots.
+The posterior predictive plot shows that the model is able to capture the observed data well enough.
+
+The posterior distributions of the group means and standard deviations can be extracted for further plotting and interpretation.
+
+```{r}
+#| label: bayesian-estimation-plots
+#| code-summary: Plot posterior distributions
+
+draws <- as_draws_df(fit) 
+
+mu_group1 <- draws$b_Intercept
+mu_group2 <- draws$b_DietVeg + mu_group1
+sigma_group1 <- exp(draws$b_sigma_Intercept)
+sigma_group2 <- exp(draws$b_sigma_DietVeg + draws$b_sigma_Intercept)
+
+plot_data <- data.frame(
+    mu_group1 = mu_group1,
+    mu_group2 = mu_group2,
+    sigma_group1 = sigma_group1,
+    sigma_group2 = sigma_group2
+)
+
+p1 <- ggplot(plot_data, aes(x = mu_group1)) +
+    geom_density(fill = "orange", alpha = 0.7) +
+    geom_density(aes(x = mu_group2), fill = "purple", alpha = 0.7) +
+    labs(title = "Posterior Distributions of Group Means",
+         x = "Shannon Index",
+         y = "Density") +
+    annotate("text", x = max(c(mu_group1, mu_group2)), y = Inf, 
+             label = "Orange: Group 1\nPurple: Group 2", 
+             vjust = 2, hjust = 1) +
+    theme_minimal()
+
+p1
+```
+
+
+## 1.3. Conclusions
+
+
+
+>>> TODO: RESTRUCTURE <<<
+
 # 1. Introduction
 
-In microbiome research it is common to compute alpha diversity metrics and compare them between two groups. Alpha diversity is a measure of the within sample diversity, and it is often computed as the number of observed species (richness), the Shannon index, or the Simpson index. Frequentist methods for comparing groups include the t-test and the Wilcoxon rank-sum test. For comparision of more than two groups, Kruskal-Wallis test is commonly used, along with ANOVA and PERMANOVA. 
+In microbiome research it is common to compute alpha diversity metrics and compare
+them between two groups. Alpha diversity is a measure of the within sample diversity,
+and it is often computed as the number of observed species (richness), the Shannon index,
+or the Simpson index. Frequentist methods for comparing groups include
+the t-test and the Wilcoxon rank-sum test. For comparision of more than two groups,
+Kruskal-Wallis test is commonly used, along with ANOVA and PERMANOVA. 
 
-However, these methods have their shortcomings, and rely on assumptions that are often violated in practice when handling microbiome data (e.g. non-normality, heteroscedasticity, and sparsity). Probabilistic methods, provide a more flexible framework able to handle these issues in a robust way. Yet, they are not widely used in the field of microbiome research. Increasing awareness and showcasing the advantages of probabilistic methods as an alternative contributes to laying the foundation for wider adoption within the field. 
+However, these methods have their shortcomings, and rely on assumptions that are
+often violated in practice when handling microbiome data (e.g. non-normality, 
+heteroscedasticity, and sparsity). Probabilistic methods, provide a more flexible
+framework able to handle these issues in a robust way. Yet, they are not widely
+used in the field of microbiome research. Increasing awareness and showcasing
+the advantages of probabilistic methods as an alternative contributes to 
+laying the foundation for wider adoption within the field. 
 
 ## 1.1. Alpha Diversity and the Shannon index
 
@@ -61,7 +229,7 @@ tse <- peerj13075
 The `peerj13075` dataset contains skin microbial profiles from 58 volunteers. Data is from 16S amplicon sequencing and contains samples from across 3 regions. 
 
 ```{r}
-#| label: data-wrangling
+#| label: data-wrangling 
 
 # Selecting only two regions
 tse <- tse[, tse$Geographical_location %in% c("Ahmednagar", "Nashik")]
