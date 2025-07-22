@@ -125,7 +125,7 @@ intervals (CIs). Here our baseline group is the Mixed diet. The intercept for
 DietVeg shows the difference in the Shannon index compared to the Mixed diet. 
 
 The CI for the intercept of DietVeg indicates that the difference between the 
-two groups is not statistically significant, as the interval includes zero.
+two groups is likely to not be meaningful, as the CI includes 0. 
 
 ## 1.3. Model diagnostics
 
