@@ -178,9 +178,44 @@ paint a clear picture of the higher overlap between the Adult and Edlerly group,
 while the Middle aged group differs. In both plots the red dashed line indicates 
 the total population posterior mean.
 
-# 3. Classical approach
+# 3. Classical approachs to multi-group testing
 
-With classical methods multi group comparisons are often done in multiple steps. 
+## 3.1. ANOVA
+
+ANOVA would be the closest classical alternative. Assumptions in ANOVA are
+normality and equal variance. 
+
+```{r}
+#| label: annova
+summary(aov(shannon ~ Age, data = df))
+```
+
+Our result inidcates that Age is a significant predictor on explaining differences
+in the Shannon index. After observing a significant result, it is typical to further
+inspect the data with a pairwise t-test. Another option is
+Tukey's Honest Significant Difference (HSD). Both of which require adjusting p-values
+due to being post-hoc tests.
+
+```{r}
+#| label: pairwise-t-test
+
+# Pairwise t-test 
+pairwise.t.test(df$shannon, df$Age, p.adjust = "fdr")
+
+# HSD
+TukeyHSD(aov(shannon ~ Age, data = df))
+``` 
+
+Both post-hoc tests point to the significant difference between the groups
+`Adult` and `Middle age`. In the pairwise t-test the difference between groups
+`Middle age` and `Elderly` approaches the significance boundry (p < 0.05).
+
+## 3.2. Kruskal-Wallis
+
+Another option to ANOVA is the Kruskal-Wallis test. Kruskal-Wallis relaxes the
+assumption of normality. However, It also needs to be paired with 
+a post-hoc test to infer paired differences after global significance has been tested.
+Kruskal-Wallis is typically paired with Dunn's post-hoc test.
 
 ```{r}
 #| label: kruskal-test
@@ -191,16 +226,19 @@ kruskal.test(shannon ~ Age, df)
 We get a p-value < 0.05, so there are 'significant' differences within the groups.
 
 ```{r}
-pairwise.wilcox.test(df$shannon, df$Age, p.adjust = "fdr")
+#| label: DUNN's test
+
+library(dunn.test)
+
+dunn.test(df$shannon, df$Age, method = "bh")
 ```
 
-Post-hoc testing requires adjusting the p-values. Here we observe
-that the groups `Middle_age` and `Adult` have a significant difference.
-Other pairwise comparisons are not significant. 
+Significant p-values, after adjustment, are reported for the comparison between
+groups `Adult` and `Middle age`.
 
 # 4. Conclusions
 
-Both the probabilistic and classical approach to multigroup testing gives the same result. 
-The middle age group is signaled out. Contrasting the two methods, it is clear
-that the probabilistic approach gives a richer inference, with the added benefit
-of intuitive interpretation. 
+Both the probabilistic and classical approachs to multigroup testing give the same result. 
+The `Middle age` group is signaled out. Contrasting the methods, it is clear
+that the probabilistic approach gives richer inference, with the added benefit
+of intuitive interpretation.
