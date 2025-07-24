@@ -1,0 +1,198 @@
+---
+title: "Probabilistic multi-group comparison of alpha diversity"
+author: "Rasmus Hindström"
+date: last-modified
+format:
+    html:
+        toc: true
+        toc_float: true
+        embed-resources: true
+---
+
+# 0. Summary
+
+This report demonstrates the use and interpretation of a probabilisitc alternative
+to multi-group comparisons of alpha diversity. The basis is a multi-level model
+with a group-level effect, which is estimated using Bayesian estimation with the `brms` package.
+
+
+# 1. Data preparation
+
+Preparing data from the `mia` package.
+
+```{r}
+#| label: load-libraries
+#| code-summary: Load required libraries
+#| echo: true
+#| output: false
+library(mia)
+library(dplyr)
+library(brms)
+library(bayesplot)
+```
+
+```{r}
+#| label: prepare-data
+#| code-summary: prepare example data
+data("peerj13075", package = "mia")
+tse <- peerj13075
+tse <- addAlpha(
+    tse,
+    assay.type = "counts",
+    index = "shannon"
+)
+df <- as.data.frame(colData(tse))
+```
+
+# 2. Model fitting
+
+The model is fitted using the `brm` function from the `brms` package.
+Reponse variable is the Shannon index, and the grouping variable is the 3 classes
+of `age`; `Adult`, `Middle_age`, and `Elderly`.
+
+Model definition is as follows:
+
+$$
+y_{ik} \sim \text{t}(\nu, \mu_{ik}, \sigma_k)
+$$
+
+$$
+\mu_{ik} = \beta_0 + \beta_k
+$$
+
+$$
+\sigma_k = \gamma + \gamma_k
+$$
+
+*Default priors used by `brm()`*
+
+$$
+\nu \sim \gamma(2, 0.1)
+$$
+$$
+\beta_0 \sim \text{t}(3, 1.3, 2.5)
+$$
+$$
+\beta_k, \sigma \sim \text{t}(3, 0, 2.5)
+$$
+
+
+```{r}
+#| label: fit-model
+#| code-summary: Fit Bayesian model
+#| warning: false
+#| output: false 
+
+# Model with partial pooling
+fit <- brm(
+    formula = bf(
+        shannon ~ 1 +(1|Age),
+        sigma ~ 1 + (1|Age)
+    ),
+    data = df,
+    family = student(),
+    iter = 8000,
+    chains = 6,
+    cores = 6
+) 
+```
+
+```{r}
+#| label: fit-summary
+#| echo: false
+#| output: true
+    
+summary(fit)
+```
+
+```{r}
+#| label: plotting-post
+#| code-summary: Posterior plotting
+#| code-fold: true
+#| fig-height: 6
+#| fig-width: 12  
+  
+library(ggplot2)
+library(patchwork)
+
+draws <- as_draws_df(fit)
+plot_data <- data.frame(
+    population = draws$b_Intercept,
+    pop_mean = mean(draws$b_Intercept),
+    adult = draws$b_Intercept + draws$'r_Age[Adult,Intercept]',
+    elderly = draws$b_Intercept + draws$'r_Age[Elderly,Intercept]',
+    middle_age = draws$b_Intercept + draws$'r_Age[Middle_age,Intercept]'
+)
+
+p1 <- ggplot(data = plot_data) +
+    geom_density(aes(x = adult), fill = "blue", alpha = 0.5, color = "blue") +
+    geom_density(aes(x = elderly), fill = "purple", alpha = 0.6, color = "purple") +
+    geom_density(aes(x = middle_age), fill = "orange", alpha = 0.7, color = "orange") +
+    geom_vline(xintercept = plot_data$pop_mean, linetype = "dashed", color = "red", linewidth = 1) +
+    labs(
+        title = "Posterior Distributions of Group means",
+        x = "Shannon index",
+        y = "Density"
+    ) +
+    annotate(
+        "text", x = 2, y = 2.5,
+        label = "Orange: Middle Aged\nPurple: Elderly\nBlue: Adult",
+    ) +
+    theme_minimal()
+
+p2 <- ggplot(data = plot_data) +
+    geom_boxplot(aes(y = adult, x = 1), fill = "blue", alpha = 0.7, color = "black") +
+    geom_boxplot(aes(y = elderly, x = 2), fill = "purple", alpha = 0.7, color = "black") +
+    geom_boxplot(aes(y = middle_age, x = 3), fill = "orange", alpha = 0.7, color = "black") +
+    geom_hline(yintercept = plot_data$pop_mean, linetype = "dashed", color = "red", linewidth = 1) +
+    scale_x_continuous(
+        breaks = c(1, 2, 3),
+        labels = c("Adult", "Elderly", "Middle Age")
+    ) +
+    labs(
+        title = "Boxplots of Group Means",
+        x = "Group",
+        y = "Shannon Index"
+    ) +
+    theme_minimal()
+
+p1 + p2
+```
+
+From the plots we can infer groups are not similar. Particularly the 
+Middle aged (Orange) group appears to have a lower Shannon index. The boxplots 
+paint a clear picture of the higher overlap between the Adult and Edlerly group,
+while the Middle aged group differs. In both plots the red dashed line indicates 
+the total population posterior mean.
+
+# 3. Classical approach
+
+With classical methods multi group comparisons are often done in multiple steps. 
+
+```{r}
+#| label: kruskal-test
+
+kruskal.test(shannon ~ Age, df)
+```
+
+We get a p-value < 0.05, so there are 'significant' differences within the groups.
+
+```{r}
+pairwise.wilcox.test(df$shannon, df$Age, p.adjust = "fdr")
+```
+
+Post-hoc testing requires adjusting the p-values. Here we observe
+that the groups `Middle_age` and `Adult` have a significant difference.
+Other pairwise comparisons are not significant. 
+
+# 4. Conclusions
+
+Both the probabilistic and classical approach to multigroup testing gives the same result. 
+The middle age group is signaled out. Contrasting the two methods, it is clear
+that the probabilistic approach gives a richer inference, with the added benefit
+of intuitive interpretation. 
+
+Note: there are some warnings from the sampler of the probabilistic model,
+but Rhats are close to 1 and ESS are not too low, if we disregard the estimates for 
+the sigma term. Some tweaks to the model definition might be required to get cleaner
+sampling. 
