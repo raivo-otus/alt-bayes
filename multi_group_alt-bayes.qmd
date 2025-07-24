@@ -103,6 +103,8 @@ fit <- brm(
 #| output: true
     
 summary(fit)
+
+coefficients(fit)
 ```
 
 ```{r}
