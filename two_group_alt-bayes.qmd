@@ -3,10 +3,8 @@ title: "Probabilistic alternative to 2 group t-test"
 author: "Rasmus Hindström"
 date: last-modified
 format:
-    html:
+    gfm:
         toc: true
-        toc_float: true
-        embed-resources: true
 ---
 
 # 0. Summary

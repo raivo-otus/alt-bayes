@@ -3,10 +3,8 @@ title: "Probabilistic multi-group comparison of alpha diversity"
 author: "Rasmus Hindström"
 date: last-modified
 format:
-    html:
+    gfm:
         toc: true
-        toc_float: true
-        embed-resources: true
 ---
 
 # 0. Summary
