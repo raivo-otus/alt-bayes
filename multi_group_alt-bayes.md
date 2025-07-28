@@ -1,6 +1,6 @@
 # Probabilistic multi-group comparison of alpha diversity
 Rasmus Hindström
-2025-07-24
+2025-07-28
 
 - [0. Summary](#0-summary)
 - [1. Data preparation](#1-data-preparation)
@@ -27,6 +27,9 @@ library(mia)
 library(dplyr)
 library(brms)
 library(bayesplot)
+library(dunn.test)
+library(ggplot2)
+library(patchwork)
 ```
 
 ``` r
@@ -79,6 +82,7 @@ $$
 
 ``` r
 # Model with partial pooling
+start <- proc.time()
 fit <- brm(
     formula = bf(
         shannon ~ Age,
@@ -89,7 +93,9 @@ fit <- brm(
     iter = 4000,
     chains = 4,
     cores = 4
-) 
+)
+end <- proc.time()
+runTime_brm <- end - start
 ```
 
      Family: student 
@@ -102,16 +108,16 @@ fit <- brm(
 
     Regression Coefficients:
                         Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
-    Intercept               1.46      0.14     1.19     1.74 1.00     9187     6229
-    sigma_Intercept        -0.44      0.17    -0.76    -0.11 1.00     8043     5790
-    AgeElderly             -0.15      0.27    -0.67     0.37 1.00     8341     6213
-    AgeMiddle_age          -0.57      0.19    -0.95    -0.19 1.00     8836     6698
-    sigma_AgeElderly        0.33      0.25    -0.15     0.83 1.00     9327     6510
-    sigma_AgeMiddle_age    -0.27      0.26    -0.76     0.26 1.00     8483     6358
+    Intercept               1.46      0.14     1.16     1.74 1.00     8460     5222
+    sigma_Intercept        -0.44      0.17    -0.76    -0.10 1.00     6934     5364
+    AgeElderly             -0.14      0.27    -0.68     0.38 1.00     7816     6013
+    AgeMiddle_age          -0.56      0.20    -0.94    -0.17 1.00     7660     5626
+    sigma_AgeElderly        0.33      0.25    -0.14     0.82 1.00     7323     5797
+    sigma_AgeMiddle_age    -0.26      0.26    -0.75     0.25 1.00     7494     6123
 
     Further Distributional Parameters:
        Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
-    nu    24.40     14.71     5.70    60.36 1.00     9088     5644
+    nu    24.45     14.73     5.93    61.19 1.00     9857     5860
 
     Draws were sampled using sampling(NUTS). For each parameter, Bulk_ESS
     and Tail_ESS are effective sample size measures, and Rhat is the potential
@@ -128,9 +134,6 @@ comparisons.
 <summary>Posterior plotting</summary>
 
 ``` r
-library(ggplot2)
-library(patchwork)
-
 draws <- as_draws_df(fit)
 population <- c(draws$b_Intercept, draws$b_Intercept + draws$b_AgeMiddle_age,  draws$b_Intercept + draws$b_AgeElderly)
 pop_mean <- mean(population)
@@ -181,11 +184,60 @@ p1 + p2
 
 ![](multi_group_alt-bayes_files/figure-commonmark/plotting-post-1.png)
 
+    prob_adult_elderly <- mean(plot_data$adult > plot_data$elderly)
+    prob_adult_middleage <- mean(plot_data$adult > plot_data$middle_age)
+    prob_elderly_middleage <- mean(plot_data$elderly > plot_data$middle_age)
+
 From the plots we can infer groups are not similar. Particularly the
 Middle aged (Orange) group appears to have a lower Shannon index. The
 boxplots paint a clear picture of the higher overlap between the Adult
 and Edlerly group, while the Middle aged group differs. In both plots
 the red dashed line indicates the total population posterior mean.
+
+Using the posterior distributions, we can make statements about the
+differences between the groups. In this context the probability of
+observing a higher Shannon index is appropriate, and akin to a
+frequentist p-value.
+
+<details class="code-fold">
+<summary>Quantify probabilities of higher Shannon index</summary>
+
+``` r
+probabilities <- data.frame(
+    Comparison = c(
+        "Adult vs Elderly",
+        "Adult vs Middle age",
+        "Elderly vs Middle age"
+    ),
+    Prob_greater = c(
+        prob_adult_elderly <- mean(plot_data$adult > plot_data$elderly),
+        prob_adult_middleage <- mean(plot_data$adult > plot_data$middle_age),
+        prob_elderly_middleage <- mean(plot_data$elderly > plot_data$middle_age)
+    ),
+    High_P = c(
+        ifelse(prob_adult_elderly > 0.95, "*", ""),
+        ifelse(prob_adult_middleage > 0.95, "*", ""),
+        ifelse(prob_elderly_middleage > 0.95, "*", "")
+    )
+)
+
+knitr::kable(probabilities, caption = "Probabilities of Higher Shannon Index", format = "pipe")
+```
+
+</details>
+
+| Comparison            | Prob_greater | High_P |
+|:----------------------|-------------:|:-------|
+| Adult vs Elderly      |     0.704125 |        |
+| Adult vs Middle age   |     0.996750 | \*     |
+| Elderly vs Middle age |     0.940875 |        |
+
+Probabilities of Higher Shannon Index
+
+Notice, that these probabilities are not p-values, and their
+interpretation is more intuitive. The probabilities can also be computed
+over the highest density interval’s (HDI) or 95% CI’s. Here we have used
+the full posterior distributions.
 
 # 3. Classical approachs to multi-group testing
 
@@ -195,7 +247,12 @@ ANOVA would be the closest classical alternative. Assumptions in ANOVA
 are normality and equal variance.
 
 ``` r
-summary(aov(shannon ~ Age, data = df))
+start <- proc.time() 
+res_annova <- aov(shannon ~ Age, data = df)
+end <- proc.time()
+runTime_annova <- end - start
+
+summary(res_annova)
 ```
 
                 Df Sum Sq Mean Sq F value Pr(>F)  
@@ -211,7 +268,8 @@ Another option is Tukey’s Honest Significant Difference (HSD). Both of
 which require adjusting p-values due to being post-hoc tests.
 
 ``` r
-# Pairwise t-test 
+# Pairwise t-test
+start <- proc.time()
 pairwise.t.test(df$shannon, df$Age, p.adjust = "fdr")
 ```
 
@@ -227,7 +285,11 @@ pairwise.t.test(df$shannon, df$Age, p.adjust = "fdr")
     P value adjustment method: fdr 
 
 ``` r
+end <- proc.time()
+runTime_pwt <- end - start
+
 # HSD
+start <- proc.time()
 TukeyHSD(aov(shannon ~ Age, data = df))
 ```
 
@@ -241,6 +303,11 @@ TukeyHSD(aov(shannon ~ Age, data = df))
     Elderly-Adult      -0.1477303 -0.6783059  0.38284533 0.7814198
     Middle_age-Adult   -0.5690925 -1.1182905 -0.01989461 0.0406666
     Middle_age-Elderly -0.4213623 -1.0060281  0.16330359 0.2011258
+
+``` r
+end <- proc.time()
+runTime_hsd <- end - start
+```
 
 Both post-hoc tests point to the significant difference between the
 groups `Adult` and `Middle age`. In the pairwise t-test the difference
@@ -256,6 +323,7 @@ significance has been tested. Kruskal-Wallis is typically paired with
 Dunn’s post-hoc test.
 
 ``` r
+start <- proc.time()
 kruskal.test(shannon ~ Age, df)
 ```
 
@@ -265,19 +333,19 @@ kruskal.test(shannon ~ Age, df)
     data:  shannon by Age
     Kruskal-Wallis chi-squared = 7.7239, df = 2, p-value = 0.02103
 
+``` r
+end <- proc.time()
+runTime_kw <- end - start
+```
+
 We get a p-value \< 0.05, so there are ‘significant’ differences within
 the groups.
 
 ``` r
-library(dunn.test)
-
-dunn.test(df$shannon, df$Age, method = "bh")
+start <- proc.time()
+dunn.test(df$shannon, df$Age, method = "bh", kw = FALSE)
 ```
 
-      Kruskal-Wallis rank sum test
-
-    data: x and group
-    Kruskal-Wallis chi-squared = 7.7239, df = 2, p-value = 0.02
 
                                Comparison of x by group                            
                                  (Benjamini-Hochberg)                              
@@ -293,13 +361,55 @@ dunn.test(df$shannon, df$Age, method = "bh")
     alpha = 0.05
     Reject Ho if p <= alpha/2
 
+``` r
+end <- proc.time()
+runTime_dunn <- end - start
+```
+
 Significant p-values, after adjustment, are reported for the comparison
 between groups `Adult` and `Middle age`.
 
 # 4. Conclusions
+
+<details class="code-fold">
+<summary>Comparison of methods</summary>
+
+``` r
+runTimes <- data.frame(
+    method = c(
+        "Bayesian estimation",
+        "ANNOVA + t.test",
+        "ANNOVA + HSD",
+        "Kruskal-Wallis + Dunn's"
+        ),
+    time_seconds = c(
+        runTime_brm["elapsed"],
+        runTime_annova["elapsed"] + runTime_pwt["elapsed"],
+        runTime_annova["elapsed"] + runTime_hsd["elapsed"],
+        runTime_kw["elapsed"] + runTime_dunn["elapsed"]
+        )
+)
+
+knitr::kable(runTimes, caption = "Run times for different methods", format = "pipe")
+```
+
+</details>
+
+| method                  | time_seconds |
+|:------------------------|-------------:|
+| Bayesian estimation     |       83.100 |
+| ANNOVA + t.test         |        0.006 |
+| ANNOVA + HSD            |        0.008 |
+| Kruskal-Wallis + Dunn’s |        0.008 |
+
+Run times for different methods
 
 Both the probabilistic and classical approachs to multigroup testing
 give the same result. The `Middle age` group is signaled out.
 Contrasting the methods, it is clear that the probabilistic approach
 gives richer inference, with the added benefit of intuitive
 interpretation.
+
+The main drawback of the probabilistic approach is the computational
+cost. Fitting a Bayesian model, with brms, requires compiling the model
+and running the MCMC sampler.
