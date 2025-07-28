@@ -81,7 +81,6 @@ $$
 $$
 
 ``` r
-# Model with partial pooling
 start <- proc.time()
 fit <- brm(
     formula = bf(
@@ -108,16 +107,16 @@ runTime_brm <- end - start
 
     Regression Coefficients:
                         Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
-    Intercept               1.46      0.14     1.16     1.74 1.00     8460     5222
-    sigma_Intercept        -0.44      0.17    -0.76    -0.10 1.00     6934     5364
-    AgeElderly             -0.14      0.27    -0.68     0.38 1.00     7816     6013
-    AgeMiddle_age          -0.56      0.20    -0.94    -0.17 1.00     7660     5626
-    sigma_AgeElderly        0.33      0.25    -0.14     0.82 1.00     7323     5797
-    sigma_AgeMiddle_age    -0.26      0.26    -0.75     0.25 1.00     7494     6123
+    Intercept               1.46      0.14     1.18     1.73 1.00     7440     5869
+    sigma_Intercept        -0.44      0.17    -0.76    -0.11 1.00     7387     6009
+    AgeElderly             -0.14      0.27    -0.68     0.40 1.00     7663     5533
+    AgeMiddle_age          -0.57      0.19    -0.94    -0.18 1.00     7851     5730
+    sigma_AgeElderly        0.34      0.24    -0.14     0.82 1.00     8045     6180
+    sigma_AgeMiddle_age    -0.26      0.25    -0.75     0.25 1.00     8649     6253
 
     Further Distributional Parameters:
        Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
-    nu    24.45     14.73     5.93    61.19 1.00     9857     5860
+    nu    24.19     14.00     5.89    59.61 1.00     9238     5483
 
     Draws were sampled using sampling(NUTS). For each parameter, Bulk_ESS
     and Tail_ESS are effective sample size measures, and Rhat is the potential
@@ -184,10 +183,6 @@ p1 + p2
 
 ![](multi_group_alt-bayes_files/figure-commonmark/plotting-post-1.png)
 
-    prob_adult_elderly <- mean(plot_data$adult > plot_data$elderly)
-    prob_adult_middleage <- mean(plot_data$adult > plot_data$middle_age)
-    prob_elderly_middleage <- mean(plot_data$elderly > plot_data$middle_age)
-
 From the plots we can infer groups are not similar. Particularly the
 Middle aged (Orange) group appears to have a lower Shannon index. The
 boxplots paint a clear picture of the higher overlap between the Adult
@@ -228,9 +223,9 @@ knitr::kable(probabilities, caption = "Probabilities of Higher Shannon Index", f
 
 | Comparison            | Prob_greater | High_P |
 |:----------------------|-------------:|:-------|
-| Adult vs Elderly      |     0.704125 |        |
-| Adult vs Middle age   |     0.996750 | \*     |
-| Elderly vs Middle age |     0.940875 |        |
+| Adult vs Elderly      |     0.706750 |        |
+| Adult vs Middle age   |     0.998125 | \*     |
+| Elderly vs Middle age |     0.944000 |        |
 
 Probabilities of Higher Shannon Index
 
@@ -397,9 +392,9 @@ knitr::kable(runTimes, caption = "Run times for different methods", format = "pi
 
 | method                  | time_seconds |
 |:------------------------|-------------:|
-| Bayesian estimation     |       83.100 |
-| ANNOVA + t.test         |        0.006 |
-| ANNOVA + HSD            |        0.008 |
+| Bayesian estimation     |       87.499 |
+| ANNOVA + t.test         |        0.005 |
+| ANNOVA + HSD            |        0.009 |
 | Kruskal-Wallis + Dunn’s |        0.008 |
 
 Run times for different methods
