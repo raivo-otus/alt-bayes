@@ -173,9 +173,7 @@ p2 <- ggplot(data = plot_data) +
 
 p1 + p2
 ```
-    prob_adult_elderly <- mean(plot_data$adult > plot_data$elderly)
-    prob_adult_middleage <- mean(plot_data$adult > plot_data$middle_age)
-    prob_elderly_middleage <- mean(plot_data$elderly > plot_data$middle_age)
+
 From the plots we can infer groups are not similar. Particularly the 
 Middle aged (Orange) group appears to have a lower Shannon index. The boxplots 
 paint a clear picture of the higher overlap between the Adult and Edlerly group,
