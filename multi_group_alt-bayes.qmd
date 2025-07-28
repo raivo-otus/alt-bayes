@@ -91,7 +91,6 @@ $$
 #| warning: false
 #| output: false 
 
-# Model with partial pooling
 start <- proc.time()
 fit <- brm(
     formula = bf(
@@ -323,4 +322,3 @@ of intuitive interpretation.
 The main drawback of the probabilistic approach is the computational cost.
 Fitting a Bayesian model, with brms, requires compiling the model and running
 the MCMC sampler.
-
