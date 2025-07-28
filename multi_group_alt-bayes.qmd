@@ -135,8 +135,11 @@ pop_mean <- mean(population)
 plot_data <- data.frame(
     pop_mean = pop_mean,
     adult = draws$b_Intercept,
+    adult_sd = draws$b_sigma_Intercept,
     elderly = draws$b_Intercept + draws$b_AgeElderly,
-    middle_age = draws$b_Intercept + draws$b_AgeMiddle_age
+    elderly_sd = draws$b_sigma_Intercept + draws$b_sigma_AgeElderly,
+    middle_age = draws$b_Intercept + draws$b_AgeMiddle_age,
+    middle_age_sd = draws$b_sigma_Intercept + draws$b_sigma_AgeMiddle_age
 )
 
 p1 <- ggplot(data = plot_data) +
@@ -187,7 +190,21 @@ is appropriate, and akin to a frequentist p-value.
 ```{r}
 #| label: quantify-probabilities
 #| code-fold: true
-#| code-summary: Quantify probabilities of higher Shannon index
+#| code-summary: Probabilities and Standardized Effect Size
+
+calc_eff_posterior <- function(mu_1, mu_2, sd_1, sd_2) {
+    # Calculates effect size from posterior draws
+    diff <- mu_1 - mu_2
+    pooled_sd <- sqrt((sd_1^2 + sd_2^2) / 2)
+    d <- diff / pooled_sd
+    mean_d <- mean(d)
+    ci_d <- quantile(d, probs = c(0.05, 0.95))
+    res <- list(
+        "d" = mean_d,
+        "ci" = ci_d
+    )
+    return(res)
+}
 
 probabilities <- data.frame(
     Comparison = c(
@@ -204,6 +221,21 @@ probabilities <- data.frame(
         ifelse(prob_adult_elderly > 0.95, "*", ""),
         ifelse(prob_adult_middleage > 0.95, "*", ""),
         ifelse(prob_elderly_middleage > 0.95, "*", "")
+    ),
+    cohens_d = c(
+        calc_eff_posterior(plot_data$adult, plot_data$elderly, plot_data$adult_sd, plot_data$elderly_sd)$d,
+        calc_eff_posterior(plot_data$adult, plot_data$middle_age, plot_data$adult_sd, plot_data$middle_age_sd)$d,
+        calc_eff_posterior(plot_data$elderly, plot_data$middle_age, plot_data$elderly_sd, plot_data$middle_age_sd)$d
+    ),
+    ci_lower = c(
+        calc_eff_posterior(plot_data$adult, plot_data$elderly, plot_data$adult_sd, plot_data$elderly_sd)$ci[1],
+        calc_eff_posterior(plot_data$adult, plot_data$middle_age, plot_data$adult_sd, plot_data$middle_age_sd)$ci[1],
+        calc_eff_posterior(plot_data$elderly, plot_data$middle_age, plot_data$elderly_sd, plot_data$middle_age_sd)$ci[1]
+    ),
+    ci_upper = c(
+        calc_eff_posterior(plot_data$adult, plot_data$elderly, plot_data$adult_sd, plot_data$elderly_sd)$ci[2],
+        calc_eff_posterior(plot_data$adult, plot_data$middle_age, plot_data$adult_sd, plot_data$middle_age_sd)$ci[2],
+        calc_eff_posterior(plot_data$elderly, plot_data$middle_age, plot_data$elderly_sd, plot_data$middle_age_sd)$ci[2]
     )
 )
 
@@ -213,6 +245,8 @@ knitr::kable(probabilities, caption = "Probabilities of Higher Shannon Index", f
 Notice, that these probabilities are not p-values, and their interpretation is 
 more intuitive. The probabilities can also be computed over the highest density interval's (HDI) 
 or 95% CI's. Here we have used the full posterior distributions.
+
+Effect size's are standardized and 95% CI's are reported.
 
 # 3. Classical approachs to multi-group testing
 

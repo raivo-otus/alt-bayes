@@ -107,16 +107,16 @@ runTime_brm <- end - start
 
     Regression Coefficients:
                         Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
-    Intercept               1.46      0.14     1.18     1.73 1.00     7440     5869
-    sigma_Intercept        -0.44      0.17    -0.76    -0.11 1.00     7387     6009
-    AgeElderly             -0.14      0.27    -0.68     0.40 1.00     7663     5533
-    AgeMiddle_age          -0.57      0.19    -0.94    -0.18 1.00     7851     5730
-    sigma_AgeElderly        0.34      0.24    -0.14     0.82 1.00     8045     6180
-    sigma_AgeMiddle_age    -0.26      0.25    -0.75     0.25 1.00     8649     6253
+    Intercept               1.46      0.14     1.19     1.73 1.00     8577     5755
+    sigma_Intercept        -0.44      0.17    -0.76    -0.10 1.00     7054     5534
+    AgeElderly             -0.14      0.26    -0.67     0.38 1.00     7780     6190
+    AgeMiddle_age          -0.57      0.19    -0.95    -0.19 1.00     7929     6383
+    sigma_AgeElderly        0.33      0.25    -0.15     0.84 1.00     7629     6257
+    sigma_AgeMiddle_age    -0.26      0.26    -0.76     0.24 1.00     8198     5482
 
     Further Distributional Parameters:
        Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
-    nu    24.19     14.00     5.89    59.61 1.00     9238     5483
+    nu    24.24     14.34     5.87    59.77 1.00     8680     5134
 
     Draws were sampled using sampling(NUTS). For each parameter, Bulk_ESS
     and Tail_ESS are effective sample size measures, and Rhat is the potential
@@ -140,8 +140,11 @@ pop_mean <- mean(population)
 plot_data <- data.frame(
     pop_mean = pop_mean,
     adult = draws$b_Intercept,
+    adult_sd = draws$b_sigma_Intercept,
     elderly = draws$b_Intercept + draws$b_AgeElderly,
-    middle_age = draws$b_Intercept + draws$b_AgeMiddle_age
+    elderly_sd = draws$b_sigma_Intercept + draws$b_sigma_AgeElderly,
+    middle_age = draws$b_Intercept + draws$b_AgeMiddle_age,
+    middle_age_sd = draws$b_sigma_Intercept + draws$b_sigma_AgeMiddle_age
 )
 
 p1 <- ggplot(data = plot_data) +
@@ -195,9 +198,23 @@ observing a higher Shannon index is appropriate, and akin to a
 frequentist p-value.
 
 <details class="code-fold">
-<summary>Quantify probabilities of higher Shannon index</summary>
+<summary>Probabilities and Standardized Effect Size</summary>
 
 ``` r
+calc_eff_posterior <- function(mu_1, mu_2, sd_1, sd_2) {
+    # Calculates effect size from posterior draws
+    diff <- mu_1 - mu_2
+    pooled_sd <- sqrt((sd_1^2 + sd_2^2) / 2)
+    d <- diff / pooled_sd
+    mean_d <- mean(d)
+    ci_d <- quantile(d, probs = c(0.05, 0.95))
+    res <- list(
+        "d" = mean_d,
+        "ci" = ci_d
+    )
+    return(res)
+}
+
 probabilities <- data.frame(
     Comparison = c(
         "Adult vs Elderly",
@@ -213,6 +230,21 @@ probabilities <- data.frame(
         ifelse(prob_adult_elderly > 0.95, "*", ""),
         ifelse(prob_adult_middleage > 0.95, "*", ""),
         ifelse(prob_elderly_middleage > 0.95, "*", "")
+    ),
+    cohens_d = c(
+        calc_eff_posterior(plot_data$adult, plot_data$elderly, plot_data$adult_sd, plot_data$elderly_sd)$d,
+        calc_eff_posterior(plot_data$adult, plot_data$middle_age, plot_data$adult_sd, plot_data$middle_age_sd)$d,
+        calc_eff_posterior(plot_data$elderly, plot_data$middle_age, plot_data$elderly_sd, plot_data$middle_age_sd)$d
+    ),
+    ci_lower = c(
+        calc_eff_posterior(plot_data$adult, plot_data$elderly, plot_data$adult_sd, plot_data$elderly_sd)$ci[1],
+        calc_eff_posterior(plot_data$adult, plot_data$middle_age, plot_data$adult_sd, plot_data$middle_age_sd)$ci[1],
+        calc_eff_posterior(plot_data$elderly, plot_data$middle_age, plot_data$elderly_sd, plot_data$middle_age_sd)$ci[1]
+    ),
+    ci_upper = c(
+        calc_eff_posterior(plot_data$adult, plot_data$elderly, plot_data$adult_sd, plot_data$elderly_sd)$ci[2],
+        calc_eff_posterior(plot_data$adult, plot_data$middle_age, plot_data$adult_sd, plot_data$middle_age_sd)$ci[2],
+        calc_eff_posterior(plot_data$elderly, plot_data$middle_age, plot_data$elderly_sd, plot_data$middle_age_sd)$ci[2]
     )
 )
 
@@ -221,11 +253,11 @@ knitr::kable(probabilities, caption = "Probabilities of Higher Shannon Index", f
 
 </details>
 
-| Comparison            | Prob_greater | High_P |
-|:----------------------|-------------:|:-------|
-| Adult vs Elderly      |     0.706750 |        |
-| Adult vs Middle age   |     0.998125 | \*     |
-| Elderly vs Middle age |     0.944000 |        |
+| Comparison            | Prob_greater | High_P |  cohens_d |   ci_lower | ci_upper |
+|:----------------------|-------------:|:-------|----------:|-----------:|---------:|
+| Adult vs Elderly      |     0.710750 |        | 0.4852815 | -0.9502119 | 2.133642 |
+| Adult vs Middle age   |     0.997500 | \*     | 0.9909632 |  0.4073328 | 1.788763 |
+| Elderly vs Middle age |     0.944625 |        | 0.8840643 | -0.0258875 | 2.054133 |
 
 Probabilities of Higher Shannon Index
 
@@ -233,6 +265,8 @@ Notice, that these probabilities are not p-values, and their
 interpretation is more intuitive. The probabilities can also be computed
 over the highest density interval’s (HDI) or 95% CI’s. Here we have used
 the full posterior distributions.
+
+Effect size’s are standardized and 95% CI’s are reported.
 
 # 3. Classical approachs to multi-group testing
 
@@ -392,10 +426,10 @@ knitr::kable(runTimes, caption = "Run times for different methods", format = "pi
 
 | method                  | time_seconds |
 |:------------------------|-------------:|
-| Bayesian estimation     |       87.499 |
-| ANNOVA + t.test         |        0.005 |
+| Bayesian estimation     |       87.986 |
+| ANNOVA + t.test         |        0.004 |
 | ANNOVA + HSD            |        0.009 |
-| Kruskal-Wallis + Dunn’s |        0.008 |
+| Kruskal-Wallis + Dunn’s |        0.009 |
 
 Run times for different methods
 
