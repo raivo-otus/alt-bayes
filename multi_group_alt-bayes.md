@@ -107,16 +107,16 @@ runTime_brm <- end - start
 
     Regression Coefficients:
                         Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
-    Intercept               1.46      0.14     1.17     1.74 1.00     8758     5774
-    sigma_Intercept        -0.44      0.17    -0.76    -0.10 1.00     8771     5767
-    AgeElderly             -0.15      0.26    -0.67     0.38 1.00     8875     5679
-    AgeMiddle_age          -0.57      0.20    -0.94    -0.18 1.00     9075     6520
-    sigma_AgeElderly        0.33      0.25    -0.15     0.83 1.00     9552     6781
-    sigma_AgeMiddle_age    -0.27      0.25    -0.75     0.23 1.00     9634     6736
+    Intercept               1.46      0.14     1.18     1.73 1.00     7718     5697
+    sigma_Intercept        -0.44      0.17    -0.77    -0.10 1.00     7440     6231
+    AgeElderly             -0.15      0.26    -0.67     0.37 1.00     7570     5773
+    AgeMiddle_age          -0.57      0.19    -0.95    -0.18 1.00     7493     6014
+    sigma_AgeElderly        0.33      0.24    -0.14     0.82 1.00     7568     6513
+    sigma_AgeMiddle_age    -0.27      0.26    -0.76     0.25 1.00     8118     5623
 
     Further Distributional Parameters:
        Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
-    nu    24.56     14.67     5.97    60.21 1.00    10307     6028
+    nu    24.18     14.17     5.79    60.29 1.00     8709     5259
 
     Draws were sampled using sampling(NUTS). For each parameter, Bulk_ESS
     and Tail_ESS are effective sample size measures, and Rhat is the potential
@@ -194,8 +194,8 @@ the red dashed line indicates the total population posterior mean.
 
 Using the posterior distributions, we can make statements about the
 differences between the groups. In this context the probability of
-observing a higher Shannon index is appropriate, and akin to a
-frequentist p-value.
+observing a lower Shannon index is appropriate, akin to a classical
+p-value.
 
 <details class="code-fold">
 <summary>Probabilities and Standardized Effect Size</summary>
@@ -296,23 +296,21 @@ probabilities <- data.frame(
     )
 )
 
-knitr::kable(probabilities, caption = "Probabilities of Higher Shannon Index", format = "pipe")
+knitr::kable(probabilities, caption = "", format = "pipe")
 ```
 
 </details>
 
 | Comparison | Prob_lesser | LogFC | LogFC_ci_lower | LogFC_ci_upper | cohens_d | d_ci_lower | d_ci_upper |
 |:---|---:|---:|---:|---:|---:|---:|---:|
-| Adult vs Elderly | 0.284625 | 0.1684920 | -0.2857972 | 0.6771266 | 0.4883523 | -0.9735084 | 2.085115 |
-| Adult vs Middle age | 0.003125 | 0.7184586 | 0.3073519 | 1.1616099 | 0.9874379 | 0.4053552 | 1.781978 |
-| Elderly vs Middle age | 0.057375 | 0.5499666 | -0.0246605 | 1.0959841 | 0.8741500 | -0.0350636 | 1.999226 |
+| Adult vs Elderly | 0.287125 | 0.1706364 | -0.2789085 | 0.6615323 | 0.4857318 | -0.9249908 | 2.083672 |
+| Adult vs Middle age | 0.002000 | 0.7185148 | 0.3021604 | 1.1725075 | 0.9900199 | 0.4055608 | 1.786259 |
+| Elderly vs Middle age | 0.053500 | 0.5478784 | -0.0117915 | 1.0913855 | 0.8800059 | -0.0134740 | 1.988465 |
 
-Probabilities of Higher Shannon Index
-
-Notice, that these probabilities are not p-values, and their
-interpretation is more intuitive. The probabilities can also be computed
-over the highest density interval’s (HDI) or 95% CI’s. Here we have used
-the full posterior distributions.
+Notice, that these are not classical p-values, but posterior
+probabilities. The probabilities of observing a lower shannon index in
+the first group of each comparison are reported. They have been
+calculated from the full posterior distribution.
 
 Effect size’s are reported as Log Fold Change (LogFC) and standardized
 effect size (Cohen’s d) with 95% CI’s.
@@ -466,7 +464,7 @@ between groups `Adult` and `Middle age`.
 # 4. Conclusions
 
 <details class="code-fold">
-<summary>Comparison of methods</summary>
+<summary>Comparison of run times</summary>
 
 ``` r
 runTimes <- data.frame(
@@ -484,19 +482,17 @@ runTimes <- data.frame(
         )
 )
 
-knitr::kable(runTimes, caption = "Run times for different methods", format = "pipe")
+knitr::kable(runTimes, caption = "", format = "pipe")
 ```
 
 </details>
 
 | method                  | time_seconds |
 |:------------------------|-------------:|
-| Bayesian estimation     |       82.318 |
+| Bayesian estimation     |       83.183 |
 | ANOVA + t.test          |        0.005 |
-| ANOVA + HSD             |        0.009 |
+| ANOVA + HSD             |        0.011 |
 | Kruskal-Wallis + Dunn’s |        0.006 |
-
-Run times for different methods
 
 Although the methods are in aggreement that the significant outlier is
 the `Middle age` group. The classical methods are only able to provide a

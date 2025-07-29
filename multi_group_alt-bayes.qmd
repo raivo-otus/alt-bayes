@@ -184,8 +184,8 @@ while the Middle aged group differs. In both plots the red dashed line indicates
 the total population posterior mean.
 
 Using the posterior distributions, we can make statements about the differences
-between the groups. In this context the probability of observing a higher Shannon index
-is appropriate, and akin to a frequentist p-value.
+between the groups. In this context the probability of observing a lower Shannon index
+is appropriate, akin to a classical p-value.
 
 ```{r}
 #| label: quantify-probabilities
@@ -382,7 +382,7 @@ groups `Adult` and `Middle age`.
 ```{r}
 #| label: table-comparison
 #| code-fold: true
-#| code-summary: Comparison of methods
+#| code-summary: Comparison of run times
 
 runTimes <- data.frame(
     method = c(
@@ -399,8 +399,7 @@ runTimes <- data.frame(
         )
 )
 
-knitr::kable(runTimes, caption = "Run times for different methods", format = "pipe")
-
+knitr::kable(runTimes, caption = "", format = "pipe")
 ``` 
 
 Although the methods are in aggreement that the significant outlier is
