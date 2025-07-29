@@ -287,12 +287,12 @@ probabilities <- data.frame(
     )
 )
 
-knitr::kable(probabilities, caption = "Probabilities of Higher Shannon Index", format = "pipe")
+knitr::kable(probabilities, caption = "", format = "pipe")
 ```
 
-Notice, that these probabilities are not p-values, and their interpretation is 
-more intuitive. The probabilities can also be computed over the highest density interval's (HDI) 
-or 95% CI's. Here we have used the full posterior distributions.
+Notice, that these are not classical p-values, but posterior probabilities.
+The probabilities of observing a lower shannon index in the first group of each
+comparison are reported. They have been calculated from the full posterior distribution.
 
 Effect size's are reported as Log Fold Change (LogFC) and standardized effect size (Cohen's d) with 95% CI's.
 
