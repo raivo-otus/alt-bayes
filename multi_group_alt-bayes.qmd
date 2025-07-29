@@ -256,13 +256,13 @@ ANOVA would be the closest classical alternative. Assumptions in ANOVA are
 normality and equal variance. 
 
 ```{r}
-#| label: annova
+#| label: anova
 start <- proc.time() 
-res_annova <- aov(shannon ~ Age, data = df)
+res_anova <- aov(shannon ~ Age, data = df)
 end <- proc.time()
-runTime_annova <- end - start
+runTime_anova <- end - start
 
-summary(res_annova)
+summary(res_anova)
 
 ```
 
@@ -330,14 +330,14 @@ groups `Adult` and `Middle age`.
 runTimes <- data.frame(
     method = c(
         "Bayesian estimation",
-        "ANNOVA + t.test",
-        "ANNOVA + HSD",
+        "ANOVA + t.test",
+        "ANOVA + HSD",
         "Kruskal-Wallis + Dunn's"
         ),
     time_seconds = c(
         runTime_brm["elapsed"],
-        runTime_annova["elapsed"] + runTime_pwt["elapsed"],
-        runTime_annova["elapsed"] + runTime_hsd["elapsed"],
+        runTime_anova["elapsed"] + runTime_pwt["elapsed"],
+        runTime_anova["elapsed"] + runTime_hsd["elapsed"],
         runTime_kw["elapsed"] + runTime_dunn["elapsed"]
         )
 )
