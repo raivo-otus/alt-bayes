@@ -192,7 +192,7 @@ is appropriate, and akin to a frequentist p-value.
 #| code-fold: true
 #| code-summary: Probabilities and Standardized Effect Size
 
-calc_eff_posterior <- function(mu_1, mu_2, sd_1, sd_2) {
+calc_cohenD_post <- function(mu_1, mu_2, sd_1, sd_2) {
     # Calculates effect size from posterior draws
     diff <- mu_1 - mu_2
     pooled_sd <- sqrt((sd_1^2 + sd_2^2) / 2)
@@ -206,36 +206,84 @@ calc_eff_posterior <- function(mu_1, mu_2, sd_1, sd_2) {
     return(res)
 }
 
+calc_logfc_post <- function(mu_1, mu_2) {
+    # Calculates log fold change from posterior draws
+    logfc <- log2(mu_1 / mu_2)
+    mean_logfc <- mean(logfc)
+    ci_logfc <- quantile(logfc, probs = c(0.05, 0.95))
+    res <- list(
+        "logfc" = mean_logfc,
+        "ci" = ci_logfc
+    )
+    return(res)
+}
+
+# Calculate effect sizes
+logfc_adult_elderly <- calc_logfc_post(plot_data$adult, plot_data$elderly)
+logfc_adult_middleage <- calc_logfc_post(plot_data$adult, plot_data$middle_age)
+logfc_elderly_middleage <- calc_logfc_post(plot_data$elderly, plot_data$middle_age)
+
+cohenD_adult_elderly <- calc_cohenD_post(
+    plot_data$adult, 
+    plot_data$elderly, 
+    plot_data$adult_sd, 
+    plot_data$elderly_sd
+)
+cohenD_adult_middleage <- calc_cohenD_post(
+    plot_data$adult, 
+    plot_data$middle_age, 
+    plot_data$adult_sd, 
+    plot_data$middle_age_sd
+)
+cohenD_elderly_middleage <- calc_cohenD_post(
+    plot_data$elderly, 
+    plot_data$middle_age, 
+    plot_data$elderly_sd, 
+    plot_data$middle_age_sd
+)
+
+
+
 probabilities <- data.frame(
     Comparison = c(
         "Adult vs Elderly",
         "Adult vs Middle age",
         "Elderly vs Middle age"
     ),
-    Prob_greater = c(
-        prob_adult_elderly <- mean(plot_data$adult > plot_data$elderly),
-        prob_adult_middleage <- mean(plot_data$adult > plot_data$middle_age),
-        prob_elderly_middleage <- mean(plot_data$elderly > plot_data$middle_age)
+    Prob_lesser = c(
+        prob_adult_elderly <- mean(plot_data$adult < plot_data$elderly),
+        prob_adult_middleage <- mean(plot_data$adult < plot_data$middle_age),
+        prob_elderly_middleage <- mean(plot_data$elderly < plot_data$middle_age)
     ),
-    High_P = c(
-        ifelse(prob_adult_elderly > 0.95, "*", ""),
-        ifelse(prob_adult_middleage > 0.95, "*", ""),
-        ifelse(prob_elderly_middleage > 0.95, "*", "")
+    LogFC = c(
+        logfc_adult_elderly$logfc,
+        logfc_adult_middleage$logfc,
+        logfc_elderly_middleage$logfc
+    ),
+    LogFC_ci_lower = c(
+        logfc_adult_elderly$ci[1],
+        logfc_adult_middleage$ci[1],
+        logfc_elderly_middleage$ci[1]
+    ),
+    LogFC_ci_upper = c(
+        logfc_adult_elderly$ci[2],
+        logfc_adult_middleage$ci[2],
+        logfc_elderly_middleage$ci[2]
     ),
     cohens_d = c(
-        calc_eff_posterior(plot_data$adult, plot_data$elderly, plot_data$adult_sd, plot_data$elderly_sd)$d,
-        calc_eff_posterior(plot_data$adult, plot_data$middle_age, plot_data$adult_sd, plot_data$middle_age_sd)$d,
-        calc_eff_posterior(plot_data$elderly, plot_data$middle_age, plot_data$elderly_sd, plot_data$middle_age_sd)$d
+        cohenD_adult_elderly$d,
+        cohenD_adult_middleage$d,
+        cohenD_elderly_middleage$d
     ),
-    ci_lower = c(
-        calc_eff_posterior(plot_data$adult, plot_data$elderly, plot_data$adult_sd, plot_data$elderly_sd)$ci[1],
-        calc_eff_posterior(plot_data$adult, plot_data$middle_age, plot_data$adult_sd, plot_data$middle_age_sd)$ci[1],
-        calc_eff_posterior(plot_data$elderly, plot_data$middle_age, plot_data$elderly_sd, plot_data$middle_age_sd)$ci[1]
+    d_ci_lower = c(
+        cohenD_adult_elderly$ci[1],
+        cohenD_adult_middleage$ci[1],
+        cohenD_elderly_middleage$ci[1]
     ),
-    ci_upper = c(
-        calc_eff_posterior(plot_data$adult, plot_data$elderly, plot_data$adult_sd, plot_data$elderly_sd)$ci[2],
-        calc_eff_posterior(plot_data$adult, plot_data$middle_age, plot_data$adult_sd, plot_data$middle_age_sd)$ci[2],
-        calc_eff_posterior(plot_data$elderly, plot_data$middle_age, plot_data$elderly_sd, plot_data$middle_age_sd)$ci[2]
+    d_ci_upper = c(
+        cohenD_adult_elderly$ci[2],
+        cohenD_adult_middleage$ci[2],
+        cohenD_elderly_middleage$ci[2]
     )
 )
 
@@ -246,7 +294,16 @@ Notice, that these probabilities are not p-values, and their interpretation is
 more intuitive. The probabilities can also be computed over the highest density interval's (HDI) 
 or 95% CI's. Here we have used the full posterior distributions.
 
-Effect size's are standardized and 95% CI's are reported.
+Effect size's are reported as Log Fold Change (LogFC) and standardized effect size (Cohen's d) with 95% CI's.
+
+Combining the probabilities and effect sizes, we can conclude that the
+`Middle age` group has a lower Shannon index compared to the `Adult` group. 
+With high probability (0.99) of observing a higher Shannon index in the `Adult` group
+and a higher then 95% chance of observing an positive effect size.
+
+The `Elderly` group has a similar pattern, with a high probabilty of observing a higher Shannon index than the `Middle age` group, but effect size 95% CI's overlap zero. This indicates that the difference is not as pronounced as with the `Adult` group. 
+
+Comparing the `Adult` and `Elderly` groups, the probability of observing a higher Shannon index in the `Adult` group is greater then 50%, but the effect size is small, with a 95% CI that overlaps zero. This indicates that the difference is not likely to be meaningful.
 
 # 3. Classical approachs to multi-group testing
 
@@ -346,11 +403,12 @@ knitr::kable(runTimes, caption = "Run times for different methods", format = "pi
 
 ``` 
 
-Both the probabilistic and classical approachs to multigroup testing give the same result. 
-The `Middle age` group is signaled out. Contrasting the methods, it is clear
-that the probabilistic approach gives richer inference, with the added benefit
-of intuitive interpretation.
+Although the methods are in aggreement that the significant outlier is
+the `Middle age` group. The classical methods are only able to provide a binary (yes/no)
+inference, in contrast to the much richer and intuitive information provided by the probabilistic
+method. 
 
 The main drawback of the probabilistic approach is the computational cost.
-Fitting a Bayesian model, with brms, requires compiling the model and running
-the MCMC sampler.
+Fitting a Bayesian model, with brms, requires compiling the model code and running
+the MCMC sampler. However this margin may shrink when datasets grow larger, as 
+probabilistic model fitting scales well larger data.
