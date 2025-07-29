@@ -121,6 +121,8 @@ to have a lower Shannon diversity.
 
 Further plotting is required to make conclusions on other pair wise comparisons.
 
+# 3. Posterior plotting
+
 ```{r}
 #| label: plotting-post
 #| code-summary: Posterior plotting
@@ -186,6 +188,8 @@ the total population posterior mean.
 Using the posterior distributions, we can make statements about the differences
 between the groups. In this context the probability of observing a lower Shannon index
 is appropriate, akin to a classical p-value.
+
+# 4. Quantify probabilities and effect sizes
 
 ```{r}
 #| label: quantify-probabilities
@@ -305,9 +309,9 @@ The `Elderly` group has a similar pattern, with a high probabilty of observing a
 
 Comparing the `Adult` and `Elderly` groups, the probability of observing a higher Shannon index in the `Adult` group is greater then 50%, but the effect size is small, with a 95% CI that overlaps zero. This indicates that the difference is not likely to be meaningful.
 
-# 3. Classical approachs to multi-group testing
+# 5. Classical approachs to multi-group testing
 
-## 3.1. ANOVA
+## 5.1. ANOVA
 
 ANOVA would be the closest classical alternative. Assumptions in ANOVA are
 normality and equal variance. 
@@ -349,7 +353,7 @@ Both post-hoc tests point to the significant difference between the groups
 `Adult` and `Middle age`. In the pairwise t-test the difference between groups
 `Middle age` and `Elderly` approaches the significance boundry (p < 0.05).
 
-## 3.2. Kruskal-Wallis
+## 5.2. Kruskal-Wallis
 
 Another option to ANOVA is the Kruskal-Wallis test. Kruskal-Wallis relaxes the
 assumption of normality. However, It also needs to be paired with 
@@ -377,7 +381,7 @@ runTime_dunn <- end - start
 Significant p-values, after adjustment, are reported for the comparison between
 groups `Adult` and `Middle age`.
 
-# 4. Conclusions
+# 6. Conclusions
 
 ```{r}
 #| label: table-comparison

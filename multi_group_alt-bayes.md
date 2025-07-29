@@ -5,11 +5,14 @@ Rasmus Hindström
 - [0. Summary](#0-summary)
 - [1. Data preparation](#1-data-preparation)
 - [2. Model fitting](#2-model-fitting)
-- [3. Classical approachs to multi-group
-  testing](#3-classical-approachs-to-multi-group-testing)
-  - [3.1. ANOVA](#31-anova)
-  - [3.2. Kruskal-Wallis](#32-kruskal-wallis)
-- [4. Conclusions](#4-conclusions)
+- [3. Posterior plotting](#3-posterior-plotting)
+- [4. Quantify probabilities and effect
+  sizes](#4-quantify-probabilities-and-effect-sizes)
+- [5. Classical approachs to multi-group
+  testing](#5-classical-approachs-to-multi-group-testing)
+  - [5.1. ANOVA](#51-anova)
+  - [5.2. Kruskal-Wallis](#52-kruskal-wallis)
+- [6. Conclusions](#6-conclusions)
 
 # 0. Summary
 
@@ -107,16 +110,16 @@ runTime_brm <- end - start
 
     Regression Coefficients:
                         Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
-    Intercept               1.46      0.14     1.18     1.73 1.00     7718     5697
-    sigma_Intercept        -0.44      0.17    -0.77    -0.10 1.00     7440     6231
-    AgeElderly             -0.15      0.26    -0.67     0.37 1.00     7570     5773
-    AgeMiddle_age          -0.57      0.19    -0.95    -0.18 1.00     7493     6014
-    sigma_AgeElderly        0.33      0.24    -0.14     0.82 1.00     7568     6513
-    sigma_AgeMiddle_age    -0.27      0.26    -0.76     0.25 1.00     8118     5623
+    Intercept               1.46      0.14     1.18     1.73 1.00     9424     5770
+    sigma_Intercept        -0.45      0.17    -0.76    -0.12 1.00     8332     5887
+    AgeElderly             -0.14      0.27    -0.68     0.38 1.00     8612     5900
+    AgeMiddle_age          -0.57      0.19    -0.94    -0.18 1.00     9629     5904
+    sigma_AgeElderly        0.34      0.25    -0.13     0.83 1.00     8496     6407
+    sigma_AgeMiddle_age    -0.26      0.25    -0.76     0.26 1.00     9142     6310
 
     Further Distributional Parameters:
        Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
-    nu    24.18     14.17     5.79    60.29 1.00     8709     5259
+    nu    24.33     14.47     5.88    60.72 1.00    10603     5646
 
     Draws were sampled using sampling(NUTS). For each parameter, Bulk_ESS
     and Tail_ESS are effective sample size measures, and Rhat is the potential
@@ -128,6 +131,8 @@ observation that the groups `Adult` and `Middle age` differ. The
 
 Further plotting is required to make conclusions on other pair wise
 comparisons.
+
+# 3. Posterior plotting
 
 <details class="code-fold">
 <summary>Posterior plotting</summary>
@@ -196,6 +201,8 @@ Using the posterior distributions, we can make statements about the
 differences between the groups. In this context the probability of
 observing a lower Shannon index is appropriate, akin to a classical
 p-value.
+
+# 4. Quantify probabilities and effect sizes
 
 <details class="code-fold">
 <summary>Probabilities and Standardized Effect Size</summary>
@@ -303,9 +310,9 @@ knitr::kable(probabilities, caption = "", format = "pipe")
 
 | Comparison | Prob_lesser | LogFC | LogFC_ci_lower | LogFC_ci_upper | cohens_d | d_ci_lower | d_ci_upper |
 |:---|---:|---:|---:|---:|---:|---:|---:|
-| Adult vs Elderly | 0.287125 | 0.1706364 | -0.2789085 | 0.6615323 | 0.4857318 | -0.9249908 | 2.083672 |
-| Adult vs Middle age | 0.002000 | 0.7185148 | 0.3021604 | 1.1725075 | 0.9900199 | 0.4055608 | 1.786259 |
-| Elderly vs Middle age | 0.053500 | 0.5478784 | -0.0117915 | 1.0913855 | 0.8800059 | -0.0134740 | 1.988465 |
+| Adult vs Elderly | 0.287875 | 0.1668741 | -0.2885604 | 0.6715804 | 0.4911642 | -0.9590143 | 2.136760 |
+| Adult vs Middle age | 0.002625 | 0.7183928 | 0.3130507 | 1.1503023 | 0.9875781 | 0.4123324 | 1.795043 |
+| Elderly vs Middle age | 0.051500 | 0.5515186 | -0.0119695 | 1.1022164 | 0.8849451 | -0.0145154 | 2.068362 |
 
 Notice, that these are not classical p-values, but posterior
 probabilities. The probabilities of observing a lower shannon index in
@@ -331,9 +338,9 @@ a higher Shannon index in the `Adult` group is greater then 50%, but the
 effect size is small, with a 95% CI that overlaps zero. This indicates
 that the difference is not likely to be meaningful.
 
-# 3. Classical approachs to multi-group testing
+# 5. Classical approachs to multi-group testing
 
-## 3.1. ANOVA
+## 5.1. ANOVA
 
 ANOVA would be the closest classical alternative. Assumptions in ANOVA
 are normality and equal variance.
@@ -406,7 +413,7 @@ groups `Adult` and `Middle age`. In the pairwise t-test the difference
 between groups `Middle age` and `Elderly` approaches the significance
 boundry (p \< 0.05).
 
-## 3.2. Kruskal-Wallis
+## 5.2. Kruskal-Wallis
 
 Another option to ANOVA is the Kruskal-Wallis test. Kruskal-Wallis
 relaxes the assumption of normality. However, It also needs to be paired
@@ -461,7 +468,7 @@ runTime_dunn <- end - start
 Significant p-values, after adjustment, are reported for the comparison
 between groups `Adult` and `Middle age`.
 
-# 4. Conclusions
+# 6. Conclusions
 
 <details class="code-fold">
 <summary>Comparison of run times</summary>
@@ -489,9 +496,9 @@ knitr::kable(runTimes, caption = "", format = "pipe")
 
 | method                  | time_seconds |
 |:------------------------|-------------:|
-| Bayesian estimation     |       83.183 |
+| Bayesian estimation     |       83.126 |
 | ANOVA + t.test          |        0.005 |
-| ANOVA + HSD             |        0.011 |
+| ANOVA + HSD             |        0.007 |
 | Kruskal-Wallis + Dunn’s |        0.006 |
 
 Although the methods are in aggreement that the significant outlier is
