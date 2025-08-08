@@ -30,6 +30,7 @@ library(bayesplot)
 library(dunn.test)
 library(ggplot2)
 library(patchwork)
+library(rstatix)
 ```
 
 ```{r}
@@ -91,17 +92,18 @@ $$
 #| warning: false
 #| output: false 
 
+# Model with no partial pooling 
 start <- proc.time()
 fit <- brm(
     formula = bf(
-        shannon ~ Age,
-        sigma ~ Age
+        shannon ~ 0 + Age,
+        sigma ~ 0 + Age
     ),
     data = df,
     family = student(),
-    iter = 4000,
-    chains = 4,
-    cores = 4
+    #control = list(adapt_delta = 0.9), # If divergence issues
+    algorithm = "fullrank",
+    iter = 10000 # vi benefits from much larger iter
 )
 end <- proc.time()
 runTime_brm <- end - start
@@ -131,17 +133,17 @@ Further plotting is required to make conclusions on other pair wise comparisons.
 #| fig-width: 12  
   
 draws <- as_draws_df(fit)
-population <- c(draws$b_Intercept, draws$b_Intercept + draws$b_AgeMiddle_age,  draws$b_Intercept + draws$b_AgeElderly)
+population <- c(draws$b_AgeAdult, draws$b_AgeMiddle_age, draws$b_AgeElderly)
 pop_mean <- mean(population)
 
 plot_data <- data.frame(
     pop_mean = pop_mean,
-    adult = draws$b_Intercept,
-    adult_sd = draws$b_sigma_Intercept,
-    elderly = draws$b_Intercept + draws$b_AgeElderly,
-    elderly_sd = draws$b_sigma_Intercept + draws$b_sigma_AgeElderly,
-    middle_age = draws$b_Intercept + draws$b_AgeMiddle_age,
-    middle_age_sd = draws$b_sigma_Intercept + draws$b_sigma_AgeMiddle_age
+    adult = draws$b_AgeAdult,
+    adult_sd = draws$b_sigma_AgeAdult,
+    elderly = draws$b_AgeElderly,
+    elderly_sd = draws$b_sigma_AgeElderly,
+    middle_age = draws$b_AgeMiddle_age,
+    middle_age_sd = draws$b_sigma_AgeMiddle_age
 )
 
 p1 <- ggplot(data = plot_data) +
