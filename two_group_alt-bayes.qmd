@@ -39,6 +39,7 @@ library(mia)
 library(dplyr)
 library(brms)
 library(bayesplot)
+library(rstatix)
 ```
 
 ```{r}
@@ -117,6 +118,32 @@ Chains are well mixed in the traceplots.
 The posterior predictive plot shows that the model is able to capture the observed data well enough.
 However, the two peaked nature of the data is not captured.
 
+## 2.2. Inference
+
+Inference can directly be made from the posterior draws. 
+
+```{r}
+draws <- as_draws_df(fit)
+post_mixed <- draws$b_Intercept
+post_veg <- draws$b_Intercept + draws$b_DietVeg
+
+# Probability of mixed > veg?
+p_mixed <- mean(post_mixed > post_veg)
+
+# Log2fc effect size?
+log2fc <- log2(post_mixed / post_veg)
+mean_log2fc <- mean(log2fc)
+ci_log2fc <- quantile(log2fc, probs = c(0.05, 0.95))
+
+cat("Prob(mixed > veg) = ", p_mixed)
+cat("\nMean fc: ", mean_log2fc)
+cat("\nCI: ", ci_log2fc[1], " - ", ci_log2fc[2])
+```
+
+Here we see a close to 50% probability that the mixed diet group has a higher mean
+shannon diversity then the vegetarian diet group. Also the 95% credible interval
+covers zero. Across diet, Shannon index does not seem to differ in this data.
+
 # 3. Welch t-test
 
 Welch t-test frees the assumption of equal variances between the two groups.
@@ -132,16 +159,39 @@ The null hypothesis states that there is no difference between the two groups.
 #| label: welch-t-test
 #| code-summary: Perform Welch t-test
 
-t.test(shannon ~ Diet, data = df, var.equal = FALSE)
+tt_res <- t.test(formula = shannon ~ Diet, data = df, var.equal = FALSE)
+tt_res
 ```
 
 The p-value suggests that there is no significant difference between the two groups.
-We fail to reject the null hypothesis.
+Also the 95% confidence interval covers zero.
+We fail to reject the null hypothesis, but cannot make probabilistic statements.
+
+```{r}
+d <- cohens_d(
+    data = df,
+    formula = shannon ~ Diet
+)
+
+cat("Cohen's D: ", d$effsize, "\n")
+```
+
+In addition, the effect size is negligible.
+
+# 4. Conclusions
+
+Using a probabilisitic framework comparing means give comperable results to the
+classical Welch t-test. However the inference is arguably more straight forward,
+and easier to grasp. Probabilistic statements are possible, and working with
+posterior draws is intuitive.
+
+The benefit of the probabilistic approach to group comparisons will become more clear,
+as we move to multi-group comparisons. The same framework is expandable and 
+inference is similar. Unlike with classical tests, where careful consideration has to
+be made choice of test, post-hoc corrections, and their assumptions and interpretation. 
 
 
 # Bibliography
-
-- Kruschke, J. K. (2013). Bayesian estimation supersedes the t test. Journal of Experimental Psychology: General, 142(2), 573–603. https://doi.org/10.1037/a0029146
 
 - Vuorre, Matti. 2017. “How to Compare Two Groups with Robust Bayesian Estimation in R.” January 2, 2017. [https://vuorre.com/posts/2017-01-02-how-to-compare-two-groups-with-robust-bayesian-estimation-using-r-stan-and-brms/](https://vuorre.com/posts/2017-01-02-how-to-compare-two-groups-with-robust-bayesian-estimation-using-r-stan-and-brms/).
 
