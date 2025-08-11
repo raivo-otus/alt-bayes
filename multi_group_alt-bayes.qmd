@@ -10,8 +10,8 @@ format:
 # 0. Summary
 
 This report demonstrates the use and interpretation of a probabilisitc alternative
-to multi-group comparisons of alpha diversity. The basis is a multi-level model
-with a group-level effect, which is estimated using Bayesian estimation with the `brms` package.
+to multi-group comparisons of alpha diversity. Group means are estimated using
+a linear model fit with the `brms` package.
 
 
 # 1. Data preparation
@@ -31,6 +31,7 @@ library(dunn.test)
 library(ggplot2)
 library(patchwork)
 library(rstatix)
+library(microbenchmark)
 ```
 
 ```{r}
@@ -48,12 +49,13 @@ df <- as.data.frame(colData(tse))
 
 # 2. Model fitting
 
-The model is fitted using the `brm` function from the `brms` package.
-Reponse variable is the Shannon index, and the grouping variable is the 3 classes
+The model is fit using the `brm` function from the `brms` package.
+The response variable is the Shannon index, and the grouping variable is the 3 classes
 of `age`; `Adult`, `Middle_age`, and `Elderly`.
 
-The model is parametrized with the group `Adult` as the baseline to which others
-are compared to.
+The model is parametrized to model the group means directly, with no intercept.
+Groups are allowed unequal variance, and means are modeled from a t distrubtion.
+The shape parameter $\nu$ is estimated from data.
 
 Model definition is as follows:
 
@@ -62,11 +64,11 @@ y_{ik} \sim \text{t}(\nu, \mu_{ik}, \sigma_k)
 $$
 
 $$
-\mu_{ik} = \beta_0 + \beta_k
+\mu_{ik} = \beta_k
 $$
 
 $$
-\sigma_k = \gamma_0 + \gamma_k
+\sigma_k = \gamma_k
 $$
 
 *Default priors used by `brm()`*
@@ -93,7 +95,6 @@ $$
 #| output: false 
 
 # Model with no partial pooling 
-start <- proc.time()
 fit <- brm(
     formula = bf(
         shannon ~ 0 + Age,
@@ -102,11 +103,9 @@ fit <- brm(
     data = df,
     family = student(),
     #control = list(adapt_delta = 0.9), # If divergence issues
-    algorithm = "fullrank",
-    iter = 10000 # vi benefits from much larger iter
+    algorithm = "sampling",
+    iter = 4000 
 )
-end <- proc.time()
-runTime_brm <- end - start
 ```
 
 ```{r}
@@ -118,8 +117,7 @@ summary(fit)
 ```
 
 Interpreting the coefficients and 95% CI we can already make the observation
-that the groups `Adult` and `Middle age` differ. The `Middle age` group appears
-to have a lower Shannon diversity. 
+that the groups appear to have rather different means.
 
 Further plotting is required to make conclusions on other pair wise comparisons.
 
@@ -320,10 +318,7 @@ normality and equal variance.
 
 ```{r}
 #| label: anova
-start <- proc.time() 
 res_anova <- aov(shannon ~ Age, data = df)
-end <- proc.time()
-runTime_anova <- end - start
 
 summary(res_anova)
 
@@ -339,16 +334,10 @@ due to being post-hoc tests.
 #| label: pairwise-t-test
 
 # Pairwise t-test
-start <- proc.time()
 pairwise.t.test(df$shannon, df$Age, p.adjust = "fdr")
-end <- proc.time()
-runTime_pwt <- end - start
 
 # HSD
-start <- proc.time()
 TukeyHSD(aov(shannon ~ Age, data = df))
-end <- proc.time()
-runTime_hsd <- end - start
 ``` 
 
 Both post-hoc tests point to the significant difference between the groups
@@ -364,48 +353,55 @@ Kruskal-Wallis is typically paired with Dunn's post-hoc test.
 
 ```{r}
 #| label: kruskal-test
-start <- proc.time()
 kruskal.test(shannon ~ Age, df)
-end <- proc.time()
-runTime_kw <- end - start
 ```
 
 We get a p-value < 0.05, so there are 'significant' differences within the groups.
 
 ```{r}
 #| label: DUNN's test
-start <- proc.time()
 dunn.test(df$shannon, df$Age, method = "bh", kw = FALSE)
-end <- proc.time()
-runTime_dunn <- end - start
 ```
 
 Significant p-values, after adjustment, are reported for the comparison between
 groups `Adult` and `Middle age`.
 
-# 6. Conclusions
+# 6. Benchmarking speed
+
+Using the `microbenchmark` package we can compare the raw speed of the methods.
 
 ```{r}
 #| label: table-comparison
 #| code-fold: true
 #| code-summary: Comparison of run times
 
-runTimes <- data.frame(
-    method = c(
-        "Bayesian estimation",
-        "ANOVA + t.test",
-        "ANOVA + HSD",
-        "Kruskal-Wallis + Dunn's"
-        ),
-    time_seconds = c(
-        runTime_brm["elapsed"],
-        runTime_anova["elapsed"] + runTime_pwt["elapsed"],
-        runTime_anova["elapsed"] + runTime_hsd["elapsed"],
-        runTime_kw["elapsed"] + runTime_dunn["elapsed"]
-        )
-)
+.bayes_est <- function(df) {
+    fit <- brm(
+    formula = bf(
+        shannon ~ 0 + Age,
+        sigma ~ 0 + Age
+    ),
+    data = df,
+    family = student(),
+    #control = list(adapt_delta = 0.9), # If divergence issues
+    algorithm = "sampling",
+    iter = 4000
+    ) 
+    return(fit)
+}
 
-knitr::kable(runTimes, caption = "", format = "pipe")
+.anova <- function(df) {
+    fit <- aov(shannon ~ Age, data = df)
+    res_posthoc <- TukeyHSD(fit)
+    return(
+        list(
+            fit = fit,
+            post-hoc = res_posthoc
+        )
+    )
+}
+
+
 ``` 
 
 Although the methods are in aggreement that the significant outlier is
